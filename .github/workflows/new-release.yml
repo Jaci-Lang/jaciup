@@ -267,7 +267,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
-          name: Jaciup ${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
           body_path: release_notes.md
