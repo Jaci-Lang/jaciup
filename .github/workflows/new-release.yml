@@ -1,0 +1,275 @@
+name: new-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        description: "Release version (e.g. 0.2.0 or v0.2.0)"
+      draft:
+        type: boolean
+        description: "Create as draft release"
+        default: false
+      prerelease:
+        type: boolean
+        description: "Mark as prerelease"
+        default: false
+
+permissions:
+  contents: write
+
+# Jaciup is self-building: the release workflow fetches the latest published
+# jaciup, uses it to install the engine toolchain, and compiles the new
+# jaciup binary from source with that engine. The raw-engine bootstrap is
+# kept as a fallback for the first release (or a broken latest release).
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone KLUR
+        # The build compiles jaciup's @klur/* requires against the KLUR
+        # stdlib; .luaurc aliases it to ../klur/src/std, so the klur repo
+        # must be checked out as a sibling.
+        shell: bash
+        run: git clone --depth 1 https://github.com/Jaci-Lang/klur.git ../klur
+
+      - name: Prepare Build Toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export JACIUP_HOME="$GITHUB_WORKSPACE/.jaciup-home"
+          mkdir -p "$JACIUP_HOME"
+
+          BASE_URL="https://pop.squareweb.app"
+          ZIP="jaciup-x86_64-unknown-linux-gnu.zip"
+
+          # --- Preferred: the latest jaciup release installs the toolchain.
+          API_URL="$BASE_URL/v1/releases/latest?product=jaciup"
+          URL=""
+          for attempt in 1 2 3; do
+            RESP="$(curl -fsSL "$API_URL" || true)"
+            URL="$(printf '%s' "$RESP" \
+              | jq -r "(.assets // [])[] | select(.name==\"$ZIP\") | .download_url" 2>/dev/null \
+              | head -n 1)"
+            if [[ -n "$URL" && "$URL" != "null" ]]; then
+              break
+            fi
+            echo "Attempt $attempt: could not resolve jaciup artifact; retrying in $((attempt * 10))s..."
+            sleep $((attempt * 10))
+          done
+
+          if [[ -n "$URL" && "$URL" != "null" ]]; then
+            [[ "$URL" == /* ]] && URL="$BASE_URL$URL"
+            echo "Downloading latest jaciup: $URL"
+            curl -fSL --retry 3 -o jaciup-latest.zip "$URL"
+            rm -rf ./jaciup-latest
+            mkdir -p ./jaciup-latest
+            unzip -o -q jaciup-latest.zip -d ./jaciup-latest
+            chmod +x ./jaciup-latest/jaciup
+
+            VER_OUT="$(JACIUP_HOME="$JACIUP_HOME" ./jaciup-latest/jaciup --version 2>&1)" \
+              || VER_OUT="version probe failed with an error"
+            echo "latest jaciup --version: $VER_OUT"
+            if ! printf '%s' "$VER_OUT" | grep -qi "error"; then
+              JACIUP_HOME="$JACIUP_HOME" ./jaciup-latest/jaciup toolchain install latest \
+                && {
+                  DEFAULT_TC="$(grep -E '^default_toolchain' "$JACIUP_HOME/settings.toml" | head -n1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')"
+                  LUAU="$JACIUP_HOME/toolchains/$DEFAULT_TC/luau"
+                  test -x "$LUAU"
+                  echo "LUAU_BIN=$LUAU" >> "$GITHUB_ENV"
+                  echo "Build toolchain installed via jaciup self-build."
+                  exit 0
+                }
+            fi
+            echo "Latest jaciup release is not usable; falling back to raw engine bootstrap."
+          else
+            echo "No published jaciup release found; falling back to raw engine bootstrap."
+          fi
+
+          # --- Fallback: raw Jaci engine (first release / broken latest).
+          API_ENGINE="$BASE_URL/v1/releases/latest?product=jaci"
+          EURL=""
+          for attempt in 1 2 3; do
+            RESP="$(curl -fsSL "$API_ENGINE" || true)"
+            EURL="$(printf '%s' "$RESP" \
+              | jq -r "(.assets // [])[] | select(.name==\"luau-x86_64-unknown-linux-gnu.zip\") | .download_url" 2>/dev/null \
+              | head -n 1)"
+            if [[ -n "$EURL" && "$EURL" != "null" ]]; then
+              break
+            fi
+            echo "Attempt $attempt: could not resolve engine artifact; retrying in $((attempt * 10))s..."
+            sleep $((attempt * 10))
+          done
+          if [[ -z "$EURL" || "$EURL" == "null" ]]; then
+            echo "Failed to resolve the Jaci engine artifact"
+            exit 1
+          fi
+          [[ "$EURL" == /* ]] && EURL="$BASE_URL$EURL"
+          echo "Downloading engine: $EURL"
+          curl -fSL --retry 3 -o engine.zip "$EURL"
+
+          rm -rf /tmp/jaci
+          mkdir -p /tmp/jaci
+          unzip -o -q engine.zip -d /tmp/jaci
+          test -f /tmp/jaci/luau
+
+          mkdir -p "$JACIUP_HOME/bin"
+          cp /tmp/jaci/luau "$JACIUP_HOME/bin/luau"
+          chmod +x "$JACIUP_HOME/bin/luau"
+          echo "LUAU_BIN=$JACIUP_HOME/bin/luau" >> "$GITHUB_ENV"
+          echo "Build toolchain installed via raw engine bootstrap."
+
+      - name: Build the New Jaciup Binary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -x "$LUAU_BIN"
+          "$LUAU_BIN" --version || true
+
+          mkdir -p dist
+          "$LUAU_BIN" --build src/init.luau --direct -o dist/jaciup
+          chmod +x dist/jaciup
+
+          # The new binary must be self-contained and operational.
+          ./dist/jaciup --version
+          ./dist/jaciup --help | head -n 5
+          ./dist/jaciup show
+          ./dist/jaciup toolchain list
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd dist
+          zip -j -9 ../jaciup-x86_64-unknown-linux-gnu.zip jaciup
+          cd ..
+          sha256sum jaciup-x86_64-unknown-linux-gnu.zip > jaciup-x86_64-unknown-linux-gnu.zip.sha256
+          ls -lah jaciup-x86_64-unknown-linux-gnu.zip*
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaciup-release
+          path: |
+            jaciup-x86_64-unknown-linux-gnu.zip
+            jaciup-x86_64-unknown-linux-gnu.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    name: publish-release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ inputs.version }}"
+          TAG="${VERSION#v}"
+
+          PREV_TAG="$(git describe --tags --abbrev=0 --exclude="v$TAG" HEAD^ 2>/dev/null || true)"
+          [[ -z "$PREV_TAG" ]] && PREV_TAG="$(git describe --tags --abbrev=0 --exclude="$TAG" HEAD^ 2>/dev/null || true)"
+
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prev=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "Release version: $TAG (previous: ${PREV_TAG:-none})"
+
+      - name: Download Release Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jaciup-release
+          path: artifacts
+
+      - name: Prepare Release Assets and Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+          cp artifacts/*.zip release-assets/
+          cd release-assets
+          sha256sum *.zip > SHA256SUMS.txt
+          echo "Release assets:"
+          ls -lah
+          echo
+          echo "Checksums:"
+          cat SHA256SUMS.txt
+
+      - name: Generate Release Notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          PREV: ${{ steps.ver.outputs.prev }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Jaciup $VERSION"
+            echo ""
+            echo "Self-built release: this binary was compiled by the latest published"
+            echo "jaciup using its own toolchain installer."
+            echo ""
+            echo "## Install"
+            echo ""
+            echo '```bash'
+            echo '# macOS / Linux'
+            echo 'curl -fsSL https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scripts/install.sh | bash'
+            echo ''
+            echo '# Windows (PowerShell)'
+            echo 'iwr -UseBasicParsing https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scripts/install.ps1 -OutFile install.ps1'
+            echo './install.ps1'
+            echo '```'
+            echo ""
+            echo "Then install a toolchain:"
+            echo ""
+            echo '```bash'
+            echo 'jaciup toolchain install latest'
+            echo '```'
+            echo ""
+            echo "## Checksums"
+            echo ""
+            echo '```'
+            cat release-assets/SHA256SUMS.txt
+            echo '```'
+            if [[ -n "$PREV" ]]; then
+              echo ""
+              echo "## Changes since $PREV"
+              echo ""
+              echo '```'
+              git log --oneline "${PREV}..HEAD" || true
+              echo '```'
+            fi
+          } > release_notes.md
+
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Jaciup ${{ steps.ver.outputs.version }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          body_path: release_notes.md
+          files: |
+            release-assets/*.zip
+            release-assets/*.sha256
+            release-assets/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
