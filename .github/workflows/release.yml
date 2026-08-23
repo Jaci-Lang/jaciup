@@ -14,6 +14,22 @@ on:
         type: boolean
         description: "Mark as prerelease"
         default: false
+      build_linux_x86_64:
+        type: boolean
+        description: "Build x86_64-unknown-linux-gnu"
+        default: true
+      build_macos_x86_64:
+        type: boolean
+        description: "Build x86_64-apple-darwin (macOS Intel)"
+        default: true
+      build_macos_arm64:
+        type: boolean
+        description: "Build aarch64-apple-darwin (macOS Apple Silicon)"
+        default: true
+      build_windows_x64:
+        type: boolean
+        description: "Build x86_64-pc-windows-msvc (Windows x64)"
+        default: true
 
   push:
     tags:
@@ -27,15 +43,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - name: x86_64-unknown-linux-gnu
-            runner: ubuntu-22.04
-          - name: x86_64-apple-darwin
-            runner: macos-15-intel
-          - name: aarch64-apple-darwin
-            runner: macos-14
-          - name: x86_64-pc-windows-msvc
-            runner: windows-latest
+        os: >-
+          ${{ fromJSON((
+          ((inputs.build_linux_x86_64 == true)  ? '[{"name":"x86_64-unknown-linux-gnu","runner":"ubuntu-22.04"}]' : '') +
+          ((inputs.build_macos_x86_64 == true)  ? '[{"name":"x86_64-apple-darwin","runner":"macos-13"}]' : '') +
+          ((inputs.build_macos_arm64 == true)  ? '[{"name":"aarch64-apple-darwin","runner":"macos-14"}]' : '') +
+          ((inputs.build_windows_x64 == true)  ? '[{"name":"x86_64-pc-windows-msvc","runner":"windows-latest"}]' : '')
+          ).replaceAll('][',',') || '[]') }}
 
     name: build-${{ matrix.os.name }}
     runs-on: ${{ matrix.os.runner }}
@@ -43,149 +57,97 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Jaciup Toolchain (Ubuntu)
+      - name: Download KLUR Toolchain (Ubuntu)
         if: matrix.os.name == 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           set -euo pipefail
 
-          BASE_URL="https://pop.squareweb.app"
-          ASSET="jaciup-${{ matrix.os.name }}.zip"
-
-          URL=$(
-            curl -fsSL "${BASE_URL}/v1/releases/latest?product=jaciup" |
-            jq -r --arg asset "$ASSET" '
+          REL="https://pop.squareweb.app/v1/releases/latest?product=klur"
+          DL=$(curl -fsSL "$REL" \
+            | jq -r --arg name "klur-${{ matrix.os.name }}.zip" '
               .assets[]
-              | select(.name == $asset)
+              | select(.name == $name)
               | .download_url
-            ' |
-            head -n 1
-          )
+            ')
 
-          if [[ -z "$URL" || "$URL" == "null" ]]; then
-            echo "Could not find asset: $ASSET"
+          if [[ -z "$DL" || "$DL" == "null" ]]; then
+            echo "Could not resolve KLUR artifact URL for ${{ matrix.os.name }}"
             exit 1
           fi
 
-          if [[ "$URL" == /* ]]; then
-            URL="${BASE_URL}${URL}"
-          fi
+          curl -fSL -o klur.zip "https://pop.squareweb.app$DL"
+          rm -rf /tmp/klur
+          mkdir -p /tmp/klur
+          unzip -o -q klur.zip -d /tmp/klur
 
-          echo "Downloading $URL"
+          chmod +x /tmp/klur/klur
+          sudo cp /tmp/klur/klur /usr/local/bin/klur
+          echo "$HOME/.klur/bin" >> "$GITHUB_PATH"
 
-          curl -fSL -o jaciup.zip "$URL"
-
-          rm -rf /tmp/jaciup
-          mkdir -p /tmp/jaciup
-          unzip -o -q jaciup.zip -d /tmp/jaciup
-
-          chmod +x /tmp/jaciup/jaciup
-          sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
-
-          jaciup init -y || true
-          jaciup toolchain install latest
-
-          echo "$HOME/.jaciup/bin" >> "$GITHUB_PATH"
-
-      - name: Setup Jaciup Toolchain (macOS)
+      - name: Download KLUR Toolchain (macOS)
         if: matrix.os.name == 'x86_64-apple-darwin' || matrix.os.name == 'aarch64-apple-darwin'
         shell: bash
         run: |
           set -euo pipefail
 
-          BASE_URL="https://pop.squareweb.app"
-          ASSET="jaciup-${{ matrix.os.name }}.zip"
-
-          URL=$(
-            curl -fsSL "${BASE_URL}/v1/releases/latest?product=jaciup" |
-            jq -r --arg asset "$ASSET" '
+          REL="https://pop.squareweb.app/v1/releases/latest?product=klur"
+          DL=$(curl -fsSL "$REL" \
+            | jq -r --arg name "klur-${{ matrix.os.name }}.zip" '
               .assets[]
-              | select(.name == $asset)
+              | select(.name == $name)
               | .download_url
-            ' |
-            head -n 1
-          )
+            ')
 
-          if [[ -z "$URL" || "$URL" == "null" ]]; then
-            echo "Could not find asset: $ASSET"
+          # The KLUR release only ships x86_64-apple-darwin; Apple Silicon runners
+          # (aarch64-apple-darwin) fall back to it via Rosetta.
+          if [[ -z "$DL" || "$DL" == "null" ]]; then
+            DL=$(curl -fsSL "$REL" \
+              | jq -r '
+                .assets[]
+                | select(.name == "klur-x86_64-apple-darwin.zip")
+                | .download_url
+              ')
+          fi
+
+          if [[ -z "$DL" || "$DL" == "null" ]]; then
+            echo "Could not resolve KLUR artifact URL for ${{ matrix.os.name }}"
             exit 1
           fi
 
-          if [[ "$URL" == /* ]]; then
-            URL="${BASE_URL}${URL}"
-          fi
+          curl -fSL -o klur.zip "https://pop.squareweb.app$DL"
+          rm -rf /tmp/klur
+          mkdir -p /tmp/klur
+          unzip -o -q klur.zip -d /tmp/klur
 
-          echo "Downloading $URL"
+          chmod +x /tmp/klur/klur
+          sudo cp /tmp/klur/klur /usr/local/bin/klur
+          echo "$HOME/.klur/bin" >> "$GITHUB_PATH"
 
-          curl -fSL -o jaciup.zip "$URL"
-
-          rm -rf /tmp/jaciup
-          mkdir -p /tmp/jaciup
-          unzip -o -q jaciup.zip -d /tmp/jaciup
-
-          chmod +x /tmp/jaciup/jaciup
-          sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
-
-          jaciup init -y || true
-          jaciup toolchain install latest
-
-          echo "$HOME/.jaciup/bin" >> "$GITHUB_PATH"
-
-      - name: Setup Jaciup Toolchain (Windows)
+      - name: Download KLUR Toolchain (Windows)
         if: matrix.os.name == 'x86_64-pc-windows-msvc'
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
 
-          $base = "https://pop.squareweb.app"
-          $asset = "jaciup-${{ matrix.os.name }}.zip"
-
           $json = Invoke-RestMethod `
-            -Uri "$base/v1/releases/latest?product=jaciup"
+            -Uri "https://pop.squareweb.app/v1/releases/latest?product=klur"
 
-          $entry = $json.assets |
-            Where-Object { $_.name -eq $asset } |
-            Select-Object -First 1
+          $name = "klur-" + ${{ matrix.os.name }} + ".zip"
+          $asset = $json.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
 
-          if (-not $entry) {
-            throw "Could not find asset: $asset"
+          if (-not $asset) {
+            throw "Could not resolve KLUR artifact URL for $name"
           }
 
-          $url = $entry.download_url
+          $url = "https://pop.squareweb.app" + $asset.download_url
+          Invoke-WebRequest -Uri $url -OutFile klur.zip
 
-          if ($url.StartsWith("/")) {
-            $url = "$base$url"
+          if (Test-Path "C:\klur") {
+            Remove-Item -Path "C:\klur" -Recurse -Force
           }
-
-          Write-Host "Downloading $url"
-
-          Invoke-WebRequest `
-            -Uri $url `
-            -OutFile jaciup.zip
-
-          Remove-Item C:\jaciup -Recurse -Force -ErrorAction SilentlyContinue
-
-          Expand-Archive `
-            -Path jaciup.zip `
-            -DestinationPath C:\jaciup `
-            -Force
-
-          "C:\jaciup" |
-            Out-File `
-              -FilePath $env:GITHUB_PATH `
-              -Encoding utf8 `
-              -Append
-
-          C:\jaciup\jaciup.exe init -y
-          C:\jaciup\jaciup.exe toolchain install latest
-
-          $home = [Environment]::GetFolderPath("UserProfile")
-
-          "$home\.jaciup\bin" |
-            Out-File `
-              -FilePath $env:GITHUB_PATH `
-              -Encoding utf8 `
-              -Append
+          Expand-Archive -Path klur.zip -DestinationPath "C:\klur" -Force
+          "C:\klur" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Standalone Jaciup Binary (Unix)
         if: matrix.os.name != 'x86_64-pc-windows-msvc'
@@ -195,17 +157,13 @@ jobs:
 
           mkdir -p dist
 
-          luau \
-            --build src/init.luau \
-            --direct \
-            --codegen \
-            --strip \
-            -o dist/jaciup
+          klur build \
+            src/init.luau \
+            --output dist/jaciup
 
           chmod +x dist/jaciup
 
           cd dist
-
           zip -j -9 \
             "../jaciup-${{ matrix.os.name }}.zip" \
             jaciup
@@ -218,12 +176,9 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
-          luau.exe `
-            --build src/init.luau `
-            --direct `
-            --codegen `
-            --strip `
-            -o dist/jaciup.exe
+          C:\klur\klur.cmd build \
+            src/init.luau \
+            --output dist/jaciup.exe
 
           7z a `
             -mx=9 `
