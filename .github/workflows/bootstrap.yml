@@ -21,65 +21,31 @@ permissions:
 
 jobs:
   build-bootstrap:
-    strategy:
-      matrix:
-        os: [
-          {name: x86_64-unknown-linux-gnu, runner: ubuntu-22.04},
-          {name: x86_64-apple-darwin, runner: macos-13},
-          {name: aarch64-apple-darwin, runner: macos-14},
-          {name: x86_64-pc-windows-msvc, runner: windows-latest}
-        ]
-    name: bootstrap-${{ matrix.os.name }}
-    runs-on: ${{ matrix.os.runner }}
+    name: bootstrap-x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout Jaci Engine Source
-        uses: actions/checkout@v4
-        with:
-          repository: Jaci-Lang/jaci
-          path: jaci-src
-          fetch-depth: 1
-
-      - name: Build Jaci Engine from Source (Unix)
-        if: matrix.os.name != 'x86_64-pc-windows-msvc'
+      - name: Download Jaci Engine Bootstrap
         run: |
-          cd jaci-src
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLUAU_STRIP_BINARIES=ON -DLUAU_ENABLE_LTO=ON
-          cmake --build build --target Luau.Repl.CLI -j 4
-          sudo cp build/luau /usr/local/bin/luau || cp build/luau /usr/local/bin/luau || true
-          cd ..
+          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=luau" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
+          curl -fSL -o luau.zip "$URL"
+          unzip -o -q luau.zip -d /tmp/jaci
+          chmod +x /tmp/jaci/*
+          sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
 
-      - name: Build Jaci Engine from Source (Windows)
-        if: matrix.os.name == 'x86_64-pc-windows-msvc'
-        shell: powershell
-        run: |
-          cd jaci-src
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLUAU_STRIP_BINARIES=ON -DLUAU_ENABLE_LTO=ON
-          cmake --build build --target Luau.Repl.CLI -j 4
-          Copy-Item build/Release/luau.exe -Destination C:/Windows/System32/luau.exe -Force
-          cd ..
-
-      - name: Build Standalone Jaciup Binary (Unix)
-        if: matrix.os.name != 'x86_64-pc-windows-msvc'
+      - name: Build Standalone Jaciup Binary
         run: |
           mkdir -p dist
           luau --build src/init.luau --direct --codegen --strip -o dist/jaciup
           chmod +x dist/jaciup
           cd dist
-          zip -j -9 ../jaciup-${{ matrix.os.name }}.zip jaciup
-
-      - name: Build Standalone Jaciup Binary (Windows)
-        if: matrix.os.name == 'x86_64-pc-windows-msvc'
-        run: |
-          mkdir -p dist
-          luau.exe --build src/init.luau --direct --codegen --strip -o dist/jaciup.exe
-          7z a -mx=9 jaciup-${{ matrix.os.name }}.zip .\dist\jaciup.exe
+          zip -j -9 ../jaciup-x86_64-unknown-linux-gnu.zip jaciup
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jaciup-bootstrap-${{ matrix.os.name }}
-          path: jaciup-${{ matrix.os.name }}.zip
+          name: jaciup-bootstrap-x86_64-unknown-linux-gnu
+          path: jaciup-x86_64-unknown-linux-gnu.zip
           retention-days: 1
 
   publish-bootstrap:
