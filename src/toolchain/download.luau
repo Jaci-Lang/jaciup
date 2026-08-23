@@ -246,11 +246,12 @@ function Download.selectArtifact(release: any): any?
     if artifacts and type(artifacts) == "table" and #artifacts > 0 then
         local fallback = nil
         for _, art in ipairs(artifacts) do
+            if type(art) ~= "table" then continue end
             local artUrl = type(art.url) == "string" and art.url or ""
             if art.available ~= false and artUrl ~= "" then
                 local name = type(art.name) == "string" and art.name or ""
                 if name:lower():match("%.zip$") then
-                    local t = art.target or {}
+                    local t = if type(art.target) == "table" then art.target else {}
                     local tOs = osOf(t.os)
                     local tArch = archOf(t.arch)
                     local matches = (tOs == "" or tOs == wantOs) and (tArch == "" or tArch == wantArch)
@@ -275,7 +276,8 @@ function Download.selectArtifact(release: any): any?
         local tripleArch = triple:match("^(x86_64|aarch64)") or wantArch
         local best = nil
         for _, asset in ipairs(assets) do
-            local name = asset.name or ""
+            if type(asset) ~= "table" then continue end
+            local name = type(asset.name) == "string" and asset.name or ""
             if name:lower():match("%.zip$") then
                 local lower = name:lower()
                 local hasArch = lower:find(tripleArch:lower(), 1, true) ~= nil

@@ -11,6 +11,7 @@ local function printHelp()
     Term.log("Actions:")
     Term.log("  install [channel]    Install a toolchain. Channel defaults to latest.")
     Term.log("                       Examples: 'latest', 'dev', '0.313.0'")
+    Term.log("                       'klur' (re)installs the KLUR layer instead.")
     Term.log("  list                 List installed toolchains.")
     Term.log("  klur [channel]       (Re)install the KLUR layer for the active toolchain.")
     Term.log("  uninstall <name>     Remove an installed toolchain.")
@@ -55,6 +56,13 @@ return function(args: {string}): number
 
     elseif subcmd == "install" or subcmd == "add" then
         local channel = args[2] or "latest"
+        if channel == "klur" then
+            -- 'klur' is a product (the KLUR layer), not an engine channel.
+            -- Route the common mistake to the layer (re)install.
+            Term.log("info: 'klur' is the KLUR product, not a toolchain channel — (re)installing the KLUR layer")
+            local ok = Manager.installKlurForActive(nil)
+            return ok and 0 or 1
+        end
         local ok = Manager.install(channel)
         return ok and 0 or 1
 
