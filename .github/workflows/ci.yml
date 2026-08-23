@@ -19,8 +19,14 @@ jobs:
       - name: Setup Jaciup Toolchain (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaciup" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
-          curl -fSL -o jaciup.zip "$URL"
+          set -euo pipefail
+          REL="https://pop.squareweb.app/v1/releases/latest?product=jaciup"
+          DL=$(curl -fsSL "$REL" | jq -r '.assets[] | select(.name=="jaciup-x86_64-unknown-linux-gnu.zip") | .download_url')
+          if [[ -z "$DL" || "$DL" == "null" ]]; then
+            echo "Could not resolve jaciup artifact URL for x86_64-unknown-linux-gnu"
+            exit 1
+          fi
+          curl -fSL -o jaciup.zip "https://pop.squareweb.app$DL"
           unzip -o -q jaciup.zip -d /tmp/jaciup
           chmod +x /tmp/jaciup/jaciup
           sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
@@ -31,8 +37,14 @@ jobs:
       - name: Setup Jaciup Toolchain (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaciup" | jq -r '.artifacts["x86_64-apple-darwin"].url')
-          curl -fSL -o jaciup.zip "$URL"
+          set -euo pipefail
+          REL="https://pop.squareweb.app/v1/releases/latest?product=jaciup"
+          DL=$(curl -fsSL "$REL" | jq -r '.assets[] | select(.name=="jaciup-x86_64-apple-darwin.zip") | .download_url')
+          if [[ -z "$DL" || "$DL" == "null" ]]; then
+            echo "Could not resolve jaciup artifact URL for x86_64-apple-darwin"
+            exit 1
+          fi
+          curl -fSL -o jaciup.zip "https://pop.squareweb.app$DL"
           unzip -o -q jaciup.zip -d /tmp/jaciup
           chmod +x /tmp/jaciup/jaciup
           sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
@@ -44,8 +56,13 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
           $json = Invoke-RestMethod -Uri "https://pop.squareweb.app/v1/releases/latest?product=jaciup"
-          $url = $json.artifacts."x86_64-pc-windows-msvc".url
+          $asset = $json.assets | Where-Object { $_.name -eq "jaciup-x86_64-pc-windows-msvc.zip" } | Select-Object -First 1
+          if (-not $asset) {
+            throw "Could not resolve jaciup artifact URL for x86_64-pc-windows-msvc"
+          }
+          $url = "https://pop.squareweb.app" + $asset.download_url
           Invoke-WebRequest -Uri $url -OutFile jaciup.zip
           Expand-Archive -Path jaciup.zip -DestinationPath C:\jaciup -Force
           echo "C:\jaciup" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append

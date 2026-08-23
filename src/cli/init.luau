@@ -17,6 +17,7 @@ local initCmd = require("./commands/init_cmd")
 local completionsCmd = require("./commands/completions_cmd")
 local selfCmd = require("./commands/self_cmd")
 local extensionCmd = require("./commands/extension_cmd")
+local bootstrapCmd = require("./commands/bootstrap_cmd")
 
 local function printHelp()
     local active, reason = Manager.resolveActiveToolchain()
@@ -40,6 +41,7 @@ local function printHelp()
     run <tc> <cmd...>    Run a command with a specific toolchain
     init                 Initialize jaciup directory, shims, and shell PATH
     completions <shell>  Generate shell completion scripts (bash, zsh, fish, powershell)
+    bootstrap [version]  Install/update jaciup itself from the releases API
     self <action>        Manage jaciup installation (update, uninstall)
 
 %s
@@ -98,6 +100,8 @@ function CLI.run(rawArgs: {string}): number
         return completionsCmd(parsed.args)
     elseif cmd == "self" then
         return selfCmd(parsed.args)
+    elseif cmd == "bootstrap" then
+        return bootstrapCmd(parsed.args)
     else
         Term.error("Unknown command '" .. cmd .. "'. Run 'jaciup --help' for available commands.")
         return 1

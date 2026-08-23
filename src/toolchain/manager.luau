@@ -69,10 +69,13 @@ function Manager.install(channelOrVersion: string): boolean
 
     local settings = Config.load()
     local mirror = settings.mirror or "https://github.com/Jaci-Lang/jaci"
+    local product = settings.product or "jaci"
 
-    Term.log("info: syncing toolchain channel '" .. version .. "'")
+    Term.log("info: syncing toolchain channel '" .. version .. "' (product '" .. product .. "') from " .. Config.getRegistryUrl())
+    -- The releases API resolves the channel to a concrete release and selects the
+    -- artifact for the current platform; candidates are a legacy fallback.
     local candidates = Platform.getAssetCandidates()
-    local downloadedZip = Download.downloadAsset(mirror, version, candidates)
+    local downloadedZip = Download.downloadAsset(mirror, version, candidates, product)
 
     if not downloadedZip then
         Term.error("Could not download toolchain release for '" .. version .. "' on " .. process.os .. "-" .. process.arch)

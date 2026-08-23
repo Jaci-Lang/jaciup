@@ -101,8 +101,6 @@ jobs:
           luau \
             --build src/init.luau \
             --direct \
-            --codegen \
-            --strip \
             -o dist/jaciup
 
           chmod +x dist/jaciup

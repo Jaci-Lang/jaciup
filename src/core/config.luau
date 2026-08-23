@@ -8,6 +8,7 @@ local Serde = require("@klur/serde")
 export type Settings = {
     defaultToolchain: string?,
     registryUrl: string?,
+    product: string?,
     mirror: string?,
     autoUpdate: boolean?,
     installedToolchains: {[string]: boolean}?,
@@ -18,6 +19,9 @@ local Config = {}
 local DEFAULT_SETTINGS: Settings = {
     defaultToolchain = "latest",
     registryUrl = "https://pop.squareweb.app",
+    -- Primary product downloaded from the releases API. "jaci" is the toolchain
+    -- itself; "jaciup" is this bootstrap; "klur" is the runtime.
+    product = "jaci",
     mirror = "https://github.com/Jaci-Lang/jaci",
     autoUpdate = true,
     installedToolchains = {},
@@ -46,6 +50,7 @@ function Config.load(): Settings
     local settings: Settings = {
         defaultToolchain = parsed.default_toolchain or parsed.defaultToolchain or DEFAULT_SETTINGS.defaultToolchain,
         registryUrl = parsed.registry_url or parsed.registryUrl or DEFAULT_SETTINGS.registryUrl,
+        product = parsed.product or DEFAULT_SETTINGS.product,
         mirror = parsed.mirror or DEFAULT_SETTINGS.mirror,
         autoUpdate = (parsed.auto_update ~= nil and parsed.auto_update) or (parsed.autoUpdate ~= nil and parsed.autoUpdate) or true,
         installedToolchains = {},
@@ -68,6 +73,7 @@ function Config.save(settings: Settings): boolean
     local tbl: {[string]: any} = {
         default_toolchain = settings.defaultToolchain or "latest",
         registry_url = settings.registryUrl or DEFAULT_SETTINGS.registryUrl,
+        product = settings.product or DEFAULT_SETTINGS.product,
         mirror = settings.mirror or DEFAULT_SETTINGS.mirror,
         auto_update = settings.autoUpdate ~= false,
         toolchains = settings.installedToolchains or {},
