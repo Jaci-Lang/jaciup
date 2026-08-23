@@ -16,33 +16,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Jaci Engine Bootstrap (Ubuntu)
+      - name: Setup Jaciup Toolchain (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=luau" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
-          curl -fSL -o luau-x86_64-unknown-linux-gnu.zip "$URL"
-          unzip -o -q luau-x86_64-unknown-linux-gnu.zip -d /tmp/jaci
-          chmod +x /tmp/jaci/*
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
+          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaciup" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
+          curl -fSL -o jaciup.zip "$URL"
+          unzip -o -q jaciup.zip -d /tmp/jaciup
+          chmod +x /tmp/jaciup/jaciup
+          sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
+          jaciup init -y || true
+          jaciup toolchain install latest
+          echo "$HOME/.jaciup/bin" >> $GITHUB_PATH
 
-      - name: Download Jaci Engine Bootstrap (macOS)
+      - name: Setup Jaciup Toolchain (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=luau" | jq -r '.artifacts["x86_64-apple-darwin"].url')
-          curl -fSL -o luau-x86_64-apple-darwin.zip "$URL"
-          unzip -o -q luau-x86_64-apple-darwin.zip -d /tmp/jaci
-          chmod +x /tmp/jaci/*
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau || cp /tmp/jaci/luau /usr/local/bin/luau || true
+          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaciup" | jq -r '.artifacts["x86_64-apple-darwin"].url')
+          curl -fSL -o jaciup.zip "$URL"
+          unzip -o -q jaciup.zip -d /tmp/jaciup
+          chmod +x /tmp/jaciup/jaciup
+          sudo cp /tmp/jaciup/jaciup /usr/local/bin/jaciup
+          jaciup init -y || true
+          jaciup toolchain install latest
+          echo "$HOME/.jaciup/bin" >> $GITHUB_PATH
 
-      - name: Download Jaci Engine Bootstrap (Windows)
+      - name: Setup Jaciup Toolchain (Windows)
         if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
-          $json = Invoke-RestMethod -Uri "https://pop.squareweb.app/v1/releases/latest?product=luau"
+          $json = Invoke-RestMethod -Uri "https://pop.squareweb.app/v1/releases/latest?product=jaciup"
           $url = $json.artifacts."x86_64-pc-windows-msvc".url
-          Invoke-WebRequest -Uri $url -OutFile luau-x86_64-pc-windows-msvc.zip
-          Expand-Archive -Path luau-x86_64-pc-windows-msvc.zip -DestinationPath C:\jaci -Force
-          echo "C:\jaci" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Invoke-WebRequest -Uri $url -OutFile jaciup.zip
+          Expand-Archive -Path jaciup.zip -DestinationPath C:\jaciup -Force
+          echo "C:\jaciup" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          C:\jaciup\jaciup.exe init -y
+          C:\jaciup\jaciup.exe toolchain install latest
+          $env:USERPROFILE = [Environment]::GetFolderPath("UserProfile")
+          echo "$env:USERPROFILE\.jaciup\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Run Jaciup Test Suite
         shell: bash
