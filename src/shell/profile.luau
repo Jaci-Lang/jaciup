@@ -26,6 +26,19 @@ function Profile.getShellType(): string
     return "bash"
 end
 
+-- Exact command to put binDir on PATH in the user's current shell, for
+-- post-install hints.
+function Profile.pathHintForShell(binDir: string): string
+    if Platform.isWindows() then
+        return string.format('$env:Path = "%s;$env:Path"', binDir)
+    end
+    local shellType = Profile.getShellType()
+    if shellType == "fish" then
+        return string.format('fish_add_path "%s"', binDir)
+    end
+    return string.format('export PATH="%s:$PATH"', binDir)
+end
+
 function Profile.configurePath(): boolean
     local home = Env.getHomeDir()
     local binDir = Env.getBinDir()

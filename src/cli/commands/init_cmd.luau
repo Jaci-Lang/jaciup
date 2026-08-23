@@ -28,6 +28,7 @@ return function(_args: {string}): number
     end
 
     Term.success(Term.bold("Jaciup initialization complete!"))
-    Term.log("Restart your shell or run: " .. Term.cyan("source ~/.bashrc") .. " (or equivalent)")
+    Term.log("Activate in this shell:  " .. Term.cyan(Profile.pathHintForShell(Env.getBinDir())))
+    Term.log("Verify everything:       " .. Term.cyan("jaciup doctor"))
     return 0
 end

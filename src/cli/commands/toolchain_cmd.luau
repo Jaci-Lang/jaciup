@@ -33,6 +33,11 @@ return function(args: {string}): number
         local ok = Manager.install(channel)
         return ok and 0 or 1
 
+    elseif subcmd == "klur" then
+        local channel = args[2]
+        local ok = Manager.installKlurForActive(channel)
+        return ok and 0 or 1
+
     elseif subcmd == "uninstall" or subcmd == "remove" then
         local channel = args[2]
         if not channel or channel == "" then
@@ -54,7 +59,7 @@ return function(args: {string}): number
 
     else
         Term.error("Unknown toolchain subcommand: " .. subcmd)
-        Term.log("Available subcommands: list, install, uninstall, link")
+        Term.log("Available subcommands: list, install, klur, uninstall, link")
         return 1
     end
 end

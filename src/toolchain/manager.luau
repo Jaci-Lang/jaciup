@@ -7,6 +7,7 @@ local Platform = require("../core/platform")
 local Freeze = require("./freeze")
 local Download = require("./download")
 local Proxy = require("./proxy")
+local Profile = require("../shell/profile")
 local Fs = require("@klur/fs")
 local Path = require("@klur/path")
 local Process = require("@klur/process")
@@ -62,6 +63,126 @@ function Manager.resolveActiveToolchain(dir: string?): (string, string)
     return "", "no toolchains installed"
 end
 
+function Manager.runBinary(binPath: string, args: {string}): (boolean, string, string)
+    local res = Process.spawn(binPath, args)
+    return res.ok, res.stdout or "", res.stderr or ""
+end
+
+-- Best-effort version probe for an installed binary ("1.0.0" or "").
+function Manager.probeVersion(binPath: string, versionArgs: {string}): string
+    local ok, stdout = Manager.runBinary(binPath, versionArgs)
+    if not ok or stdout == "" then
+        return ""
+    end
+    local v = stdout:match("(%d+%.%d+%.%d+)")
+    return v or stdout:match("([%w%.%-]+)%s*$") or ""
+end
+
+-- Install the KLUR layer into a toolchain directory. Supports both release
+-- layouts: a self-contained klur binary at the zip root, or a source tree
+-- (src/ + bin/) that gets a launcher wrapping the sibling engine.
+-- Returns the klur version string, or "" when KLUR could not be installed.
+function Manager.installKlur(tcDir: string, channel: string): string
+    local settings = Config.load()
+    local mirror = settings.mirror or "https://github.com/Jaci-Lang/jaci"
+
+    Term.log("info: syncing KLUR layer for '" .. channel .. "'")
+    local ext = Platform.getExecutableSuffix()
+    local klurZip = Download.downloadAsset(mirror, channel, {}, "klur")
+    if not klurZip then
+        Term.warn("KLUR release not found for this platform; engine installed without KLUR.")
+        Term.log("Install it later with: " .. Term.cyan("jaciup toolchain klur " .. channel))
+        return ""
+    end
+
+    local ok = Download.extractZip(klurZip, tcDir)
+    if not ok then
+        Term.warn("Failed to unpack KLUR archive; engine installed without KLUR.")
+        return ""
+    end
+
+    -- Binary layout: the zip root carries a self-contained klur executable.
+    if Fs.isFile(Path.join(tcDir, "klur" .. ext)) or Fs.isFile(Path.join(tcDir, "klur")) then
+        return Manager.probeVersion(Path.join(tcDir, "klur" .. (Fs.isFile(Path.join(tcDir, "klur" .. ext)) and ext or "")), { "version" })
+    end
+
+    -- Source layout: wrap the tree with a launcher that uses the sibling engine.
+    if Fs.isFile(Path.join(tcDir, "src", "init.luau")) then
+        local launcher = Proxy.generateKlurLauncher()
+        if Platform.isWindows() then
+            Fs.writeFile(Path.join(tcDir, "klur.cmd"), launcher)
+        else
+            Fs.writeFile(Path.join(tcDir, "klur"), launcher)
+            Process.spawn("chmod", { "+x", Path.join(tcDir, "klur") })
+        end
+        return "bundled"
+    end
+
+    Term.warn("KLUR archive did not contain a recognizable layout (no klur binary, no src/init.luau).")
+    return ""
+end
+
+-- Print a clear post-install summary: what landed, where, and the exact
+-- next step for the user's shell.
+function Manager.printInstallSummary(tcDir: string, toolchain: string)
+    local ext = Platform.getExecutableSuffix()
+    local binDir = Env.getBinDir()
+    local engineVer = Manager.probeVersion(Path.join(tcDir, "luau" .. ext), { "--version" })
+    local klurBin = Path.join(tcDir, "klur" .. ext)
+    if not Fs.isFile(klurBin) then
+        klurBin = Path.join(tcDir, "klur")
+    end
+    local klurVer = Fs.isFile(klurBin) and Manager.probeVersion(klurBin, { "version" }) or ""
+
+    print("")
+    print(Term.green(Term.bold("  Jaciup install complete")) .. Term.dim("  (toolchain " .. toolchain .. ")"))
+    print(string.format("    Engine     luau %s", engineVer ~= "" and engineVer or "unknown"))
+    if klurVer ~= "" then
+        print(string.format("    KLUR       v%s", klurVer))
+    else
+        print("    KLUR       " .. Term.yellow("not installed (engine only)"))
+    end
+    print(string.format("    Shims      %s", binDir))
+
+    local pathEnv = process.env["PATH"] or ""
+    local onPath = pathEnv:find(binDir, 1, true) ~= nil
+    if onPath then
+        print("    PATH       " .. Term.green("configured"))
+    else
+        print("    PATH       " .. Term.yellow("not in current session PATH"))
+    end
+
+    print("")
+    print(Term.bold("  Next steps:"))
+    if not onPath then
+        local cmd = Profile.pathHintForShell(binDir)
+        print("    1. " .. Term.cyan(cmd))
+        print("    2. Verify:  " .. Term.cyan("luau --version && klur --version"))
+        print("    3. Start a project:  " .. Term.cyan("mkdir myapp && cd myapp && klur init"))
+    else
+        print("    1. Verify:  " .. Term.cyan("luau --version && klur --version"))
+        print("    2. Start a project:  " .. Term.cyan("mkdir myapp && cd myapp && klur init"))
+    end
+    print("")
+end
+
+-- Install (or reinstall) only the KLUR layer into the active toolchain.
+function Manager.installKlurForActive(channel: string?): boolean
+    local active = Manager.resolveActiveToolchain()
+    if active == "" then
+        Term.error("No toolchain installed. Run: " .. Term.cyan("jaciup toolchain install latest"))
+        return false
+    end
+    local tcDir = Path.join(Env.getToolchainsDir(), active)
+    local ver = Manager.installKlur(tcDir, channel or active)
+    Proxy.installShims()
+    if ver ~= "" then
+        Manager.printInstallSummary(tcDir, active)
+        return true
+    end
+    return false
+end
+
 function Manager.install(channelOrVersion: string): boolean
     Env.ensureDirectories()
     local version = channelOrVersion:gsub("^v", "")
@@ -89,6 +210,9 @@ function Manager.install(channelOrVersion: string): boolean
         return false
     end
 
+    -- KLUR rides along with the engine so the klur shim resolves out of the box.
+    local klurVersion = Manager.installKlur(tcDir, version)
+
     settings.installedToolchains = settings.installedToolchains or {}
     settings.installedToolchains[version] = true
     if not settings.defaultToolchain or settings.defaultToolchain == "latest" then
@@ -97,7 +221,7 @@ function Manager.install(channelOrVersion: string): boolean
     Config.save(settings)
 
     Proxy.installShims()
-    Term.success("Toolchain '" .. version .. "' installed successfully and set as default.")
+    Manager.printInstallSummary(tcDir, version)
     return true
 end
 

@@ -54,6 +54,36 @@ exit 1
     return string.format(script, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 end
 
+-- Launcher for a source-tree KLUR layout: runs klur's entry on the engine
+-- that lives next to it in the toolchain directory.
+function Proxy.generateKlurLauncher(): string
+    if Platform.isWindows() then
+        return [==[
+@echo off
+rem Jaciup-generated KLUR launcher (source layout)
+set "TC_DIR=%~dp0"
+if not exist "%TC_DIR%luau.exe" (
+    echo jaciup: error: engine not found in toolchain directory >&2
+    exit /b 1
+)
+"%TC_DIR%luau.exe" "%TC_DIR%src\init.luau" -a %*
+exit /b %ERRORLEVEL%
+]==]
+    end
+
+    return [==[
+#!/usr/bin/env sh
+# Jaciup-generated KLUR launcher (source layout)
+TC_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENGINE="$TC_DIR/luau"
+if [ ! -x "$ENGINE" ]; then
+    echo "jaciup: error: engine not found in toolchain directory" >&2
+    exit 1
+fi
+exec "$ENGINE" "$TC_DIR/src/init.luau" -a "$@"
+]==]
+end
+
 function Proxy.generateWindowsShim(binaryName: string): string
     local script = [==[@echo off
 rem Jaciup auto-generated proxy shim for %s

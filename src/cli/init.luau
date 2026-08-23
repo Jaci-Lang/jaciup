@@ -18,6 +18,7 @@ local completionsCmd = require("./commands/completions_cmd")
 local selfCmd = require("./commands/self_cmd")
 local extensionCmd = require("./commands/extension_cmd")
 local bootstrapCmd = require("./commands/bootstrap_cmd")
+local doctorCmd = require("./commands/doctor_cmd")
 
 local function printHelp()
     local active, reason = Manager.resolveActiveToolchain()
@@ -40,6 +41,7 @@ local function printHelp()
     which <binary>       Display the binary path for the active toolchain (e.g. luau-lsp)
     run <tc> <cmd...>    Run a command with a specific toolchain
     init                 Initialize jaciup directory, shims, and shell PATH
+    doctor               Diagnose the installation (toolchains, shims, PATH)
     completions <shell>  Generate shell completion scripts (bash, zsh, fish, powershell)
     bootstrap [version]  Install/update jaciup itself from the releases API
     self <action>        Manage jaciup installation (update, uninstall)
@@ -96,6 +98,8 @@ function CLI.run(rawArgs: {string}): number
         return runCmd(parsed.args)
     elseif cmd == "init" then
         return initCmd(parsed.args)
+    elseif cmd == "doctor" then
+        return doctorCmd(parsed.args)
     elseif cmd == "completions" or cmd == "completion" then
         return completionsCmd(parsed.args)
     elseif cmd == "self" then
