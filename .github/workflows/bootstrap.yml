@@ -1,11 +1,12 @@
-name: release
+name: bootstrap-release
 
 on:
   workflow_dispatch:
     inputs:
       version:
         required: true
-        description: "Release version (e.g. 0.1.0 or v0.1.0)"
+        description: "Bootstrap version (e.g. 0.1.0 or v0.1.0)"
+        default: "0.1.0"
       draft:
         type: boolean
         description: "Create as draft release"
@@ -14,15 +15,12 @@ on:
         type: boolean
         description: "Mark as prerelease"
         default: false
-  push:
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  build-bootstrap:
     strategy:
       matrix:
         os: [
@@ -31,34 +29,36 @@ jobs:
           {name: aarch64-apple-darwin, runner: macos-14},
           {name: x86_64-pc-windows-msvc, runner: windows-latest}
         ]
-    name: build-${{ matrix.os.name }}
+    name: bootstrap-${{ matrix.os.name }}
     runs-on: ${{ matrix.os.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Jaci Engine Bootstrap (Ubuntu)
-        if: matrix.os.name == 'x86_64-unknown-linux-gnu'
-        run: |
-          curl -fsSL -o luau-ubuntu.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-ubuntu.zip || curl -fsSL -o luau-ubuntu.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-linux-x64.zip
-          unzip -o -q luau-ubuntu.zip -d /tmp/jaci
-          chmod +x /tmp/jaci/*
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
+      - name: Checkout Jaci Engine Source
+        uses: actions/checkout@v4
+        with:
+          repository: Jaci-Lang/jaci
+          path: jaci-src
+          fetch-depth: 1
 
-      - name: Download Jaci Engine Bootstrap (macOS)
-        if: matrix.os.name == 'x86_64-apple-darwin' || matrix.os.name == 'aarch64-apple-darwin'
+      - name: Build Jaci Engine from Source (Unix)
+        if: matrix.os.name != 'x86_64-pc-windows-msvc'
         run: |
-          curl -fsSL -o luau-macos.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-macos.zip
-          unzip -o -q luau-macos.zip -d /tmp/jaci
-          chmod +x /tmp/jaci/*
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau || cp /tmp/jaci/luau /usr/local/bin/luau || true
+          cd jaci-src
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLUAU_STRIP_BINARIES=ON -DLUAU_ENABLE_LTO=ON
+          cmake --build build --target Luau.Repl.CLI -j 4
+          sudo cp build/luau /usr/local/bin/luau || cp build/luau /usr/local/bin/luau || true
+          cd ..
 
-      - name: Download Jaci Engine Bootstrap (Windows)
+      - name: Build Jaci Engine from Source (Windows)
         if: matrix.os.name == 'x86_64-pc-windows-msvc'
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-windows.zip -OutFile luau-windows.zip
-          Expand-Archive -Path luau-windows.zip -DestinationPath C:\jaci -Force
-          echo "C:\jaci" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          cd jaci-src
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLUAU_STRIP_BINARIES=ON -DLUAU_ENABLE_LTO=ON
+          cmake --build build --target Luau.Repl.CLI -j 4
+          Copy-Item build/Release/luau.exe -Destination C:/Windows/System32/luau.exe -Force
+          cd ..
 
       - name: Build Standalone Jaciup Binary (Unix)
         if: matrix.os.name != 'x86_64-pc-windows-msvc'
@@ -78,12 +78,12 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jaciup-${{ matrix.os.name }}
+          name: jaciup-bootstrap-${{ matrix.os.name }}
           path: jaciup-${{ matrix.os.name }}.zip
           retention-days: 1
 
-  release:
-    needs: build
+  publish-bootstrap:
+    needs: build-bootstrap
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,13 +91,9 @@ jobs:
       - name: Determine Version Tag
         id: tag
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VER="${{ github.event.inputs.version }}"
-            [[ "$VER" != v* ]] && VER="v$VER"
-            echo "version=$VER" >> $GITHUB_OUTPUT
-          else
-            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
+          VER="${{ github.event.inputs.version }}"
+          [[ "$VER" != v* ]] && VER="v$VER"
+          echo "version=$VER" >> $GITHUB_OUTPUT
 
       - uses: actions/download-artifact@v4
         with:
@@ -114,11 +110,11 @@ jobs:
           sha256sum *.zip > SHA256SUMS.txt
           ls -la
 
-      - name: Create GitHub Release
+      - name: Create GitHub Bootstrap Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.version }}
-          name: Jaciup ${{ steps.tag.outputs.version }}
+          name: Jaciup Bootstrap ${{ steps.tag.outputs.version }}
           draft: ${{ github.event.inputs.draft || false }}
           prerelease: ${{ github.event.inputs.prerelease || false }}
           files: |

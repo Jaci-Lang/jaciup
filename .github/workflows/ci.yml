@@ -19,7 +19,7 @@ jobs:
       - name: Download Jaci Engine Bootstrap (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          curl -fsSL -o luau-ubuntu.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-ubuntu.zip || curl -fsSL -o luau-ubuntu.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-linux-x64.zip
+          curl -fsSL -o luau-ubuntu.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-ubuntu.zip || curl -fsSL -o luau-ubuntu.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-linux-x64.zip
           unzip -o -q luau-ubuntu.zip -d /tmp/jaci
           chmod +x /tmp/jaci/*
           sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
@@ -27,7 +27,7 @@ jobs:
       - name: Download Jaci Engine Bootstrap (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          curl -fsSL -o luau-macos.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-macos.zip
+          curl -fsSL -o luau-macos.zip https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-macos.zip
           unzip -o -q luau-macos.zip -d /tmp/jaci
           chmod +x /tmp/jaci/*
           sudo cp /tmp/jaci/luau /usr/local/bin/luau || cp /tmp/jaci/luau /usr/local/bin/luau || true
@@ -36,16 +36,9 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri https://github.com/klee-spec/jaci/releases/latest/download/luau-windows.zip -OutFile luau-windows.zip
+          Invoke-WebRequest -Uri https://github.com/Jaci-Lang/jaci/releases/latest/download/luau-windows.zip -OutFile luau-windows.zip
           Expand-Archive -Path luau-windows.zip -DestinationPath C:\jaci -Force
           echo "C:\jaci" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Install KLUR CLI
-        shell: bash
-        run: |
-          git clone --depth 1 https://github.com/Jaci-Lang/klur.git /tmp/klur
-          chmod +x /tmp/klur/bin/klur
-          sudo cp /tmp/klur/bin/klur /usr/local/bin/klur || true
 
       - name: Run Jaciup Test Suite
         shell: bash
