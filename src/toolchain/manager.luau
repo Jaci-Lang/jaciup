@@ -50,19 +50,16 @@ function Manager.resolveActiveToolchain(dir: string?): (string, string)
         return pinned, "directory override (jaciup-toolchain.toml)"
     end
 
-    -- 3. Check default toolchain from settings.toml
-    local defaultTc = Config.getDefaultToolchain()
-    if defaultTc and defaultTc ~= "" then
-        return defaultTc, "default toolchain"
-    end
-
-    -- 4. Fallback to first installed toolchain
     local installed = Manager.listInstalled()
     if #installed > 0 then
-        return installed[1], "first installed fallback"
+        local defaultTc = Config.getDefaultToolchain()
+        if defaultTc and defaultTc ~= "" and Manager.has(defaultTc) then
+            return defaultTc, "default toolchain"
+        end
+        return installed[1], "default toolchain"
     end
 
-    return "latest", "default fallback"
+    return "", "no toolchains installed"
 end
 
 function Manager.install(channelOrVersion: string): boolean

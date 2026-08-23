@@ -10,8 +10,11 @@ Test.describe("Jaciup: Config & Settings", function()
     end)
 
     Test.it("should set and retrieve default toolchain", function()
+        local prev = Config.getDefaultToolchain()
         Config.setDefaultToolchain("test-channel")
         expect(Config.getDefaultToolchain()).toBe("test-channel")
-        Config.setDefaultToolchain("dev")
+        if prev then
+            Config.setDefaultToolchain(prev)
+        end
     end)
 end)

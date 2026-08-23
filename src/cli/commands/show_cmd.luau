@@ -14,7 +14,11 @@ return function(_args: {string}): number
     Term.log(Term.bold("Installed toolchains:"))
 
     if #installed == 0 then
-        Term.log("  (no toolchains installed)")
+        Term.log("  none")
+        Term.log("")
+        Term.log(Term.yellow("No toolchains installed yet."))
+        Term.log("Run " .. Term.cyan("jaciup toolchain install latest") .. " to install the latest toolchain.")
+        Term.log("Or run " .. Term.cyan("jaciup toolchain link dev <path>") .. " to link a local build.")
     else
         for _, tc in ipairs(installed) do
             local marker = ""
@@ -25,9 +29,13 @@ return function(_args: {string}): number
             end
             Term.log("  " .. tc .. marker)
         end
+        Term.log("")
+        if active ~= "" then
+            Term.log(Term.bold("Active toolchain: ") .. Term.green(active) .. " (" .. reason .. ")")
+        else
+            Term.log(Term.bold("Active toolchain: ") .. Term.yellow("none"))
+        end
     end
 
-    Term.log("")
-    Term.log(Term.bold("Active toolchain: ") .. Term.green(active) .. " (" .. reason .. ")")
     return 0
 end

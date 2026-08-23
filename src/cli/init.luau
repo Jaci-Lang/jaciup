@@ -3,6 +3,7 @@
 
 local Args = require("./args")
 local Term = require("@klur/term")
+local Manager = require("../toolchain/manager")
 
 local VERSION = "0.1.0"
 
@@ -17,6 +18,11 @@ local completionsCmd = require("./commands/completions_cmd")
 local selfCmd = require("./commands/self_cmd")
 
 local function printHelp()
+    local active, reason = Manager.resolveActiveToolchain()
+    local statusLine = if active ~= ""
+        then Term.green(active) .. " (" .. reason .. ")"
+        else Term.yellow("none") .. " (run 'jaciup toolchain install latest' to install)"
+
     print(string.format([[
 %s %s - The official Jaci & Luau toolchain manager
 
@@ -37,7 +43,21 @@ local function printHelp()
 %s
     -h, --help           Print this help message
     -v, --version        Print version info
-]], Term.bold(Term.cyan("jaciup")), VERSION, Term.bold("USAGE:"), Term.bold("COMMANDS:"), Term.bold("OPTIONS:")))
+
+%s
+    Active toolchain: %s
+    Host architecture: %s-%s
+]],
+    Term.bold(Term.cyan("jaciup")),
+    VERSION,
+    Term.bold("USAGE:"),
+    Term.bold("COMMANDS:"),
+    Term.bold("OPTIONS:"),
+    Term.bold("STATUS:"),
+    statusLine,
+    process.os,
+    process.arch
+    ))
 end
 
 local CLI = {}
@@ -50,14 +70,9 @@ function CLI.run(rawArgs: {string}): number
         return 0
     end
 
-    if parsed.flags["h"] or parsed.flags["help"] or parsed.command == "help" then
+    if parsed.flags["h"] or parsed.flags["help"] or parsed.command == "help" or not parsed.command then
         printHelp()
         return 0
-    end
-
-    if not parsed.command then
-        -- Default action: show toolchains
-        return showCmd(parsed.args)
     end
 
     local cmd = parsed.command
@@ -80,8 +95,7 @@ function CLI.run(rawArgs: {string}): number
     elseif cmd == "self" then
         return selfCmd(parsed.args)
     else
-        Term.error("Unknown command: " .. cmd)
-        printHelp()
+        Term.error("Unknown command '" .. cmd .. "'. Run 'jaciup --help' for available commands.")
         return 1
     end
 end

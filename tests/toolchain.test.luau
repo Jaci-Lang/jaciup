@@ -1,12 +1,29 @@
 local Test = require("@klur/test")
 local Manager = require("@jaciup/toolchain/manager")
+local Env = require("@jaciup/core/env")
+local Fs = require("@klur/fs")
+local Path = require("@klur/path")
 local expect = Test.expect
 
 Test.describe("Jaciup: Toolchain Manager", function()
-    Test.it("should list installed toolchains and recognize dev", function()
+    local mockSrcDir = "/tmp/jaciup-mock-src"
+
+    Test.beforeEach(function()
+        Env.ensureDirectories()
+        Fs.mkdirp(mockSrcDir)
+        Fs.writeFile(Path.join(mockSrcDir, "luau"), "#!/bin/sh\nexit 0\n")
+        Manager.linkLocal("test-mock", mockSrcDir)
+    end)
+
+    Test.afterEach(function()
+        Fs.rimraf(mockSrcDir)
+        Manager.uninstall("test-mock")
+    end)
+
+    Test.it("should list installed toolchains and recognize mock", function()
         local list = Manager.listInstalled()
         expect(type(list)).toBe("table")
-        expect(Manager.has("dev")).toBe(true)
+        expect(Manager.has("test-mock")).toBe(true)
     end)
 
     Test.it("should resolve active toolchain", function()
