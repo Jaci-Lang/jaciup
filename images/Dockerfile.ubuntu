@@ -1,0 +1,71 @@
+# Jaci/Luau runner image (ubuntu) -- rustup-style.
+#
+# Consumes the already-published `jaciup` bootstrap (the version manager) from
+# the releases API, then asks jaciup to install a pinned toolchain. The
+# bootstrap must already exist as a published artifact before this image is
+# built; this image does NOT build jaciup from source. This mirrors rustup:
+# the image installs the toolchain manager, and the manager pulls the toolchain
+# from the releases API.
+#
+# Build:  DOCKER_BUILDKIT=1 docker build -f images/Dockerfile.ubuntu -t jaci/jaci:0.310 .
+#         (the image tag pins the toolchain version, just like rust images do)
+#
+# Pin the toolchain: pass --build-arg TOOLCHAIN_VERSION=0.310.0 (default: latest).
+# Pin the jaciup bootstrap: pass --build-arg JACIUP_VERSION=0.1.0.
+
+ARG BASE_IMAGE=ubuntu:24.04
+FROM ${BASE_IMAGE}
+
+ARG JACIUP_VERSION=latest
+ARG JACIUP_PRODUCT=jaciup
+ARG TOOLCHAIN_VERSION=latest
+# Registry base for the releases API. Override with a mirror if needed.
+ARG REGISTRY_URL=https://pop.squareweb.app
+ARG HOST=pop.squareweb.app
+
+# Tools needed to fetch, unpack and verify the artifacts.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl ca-certificates unzip jq; \
+    rm -rf /var/lib/apt/lists/*
+
+# 1. Install the jaciup bootstrap (the version manager) from the releases API.
+#    The release API exposes .assets[] (an array); the download_url is relative
+#    and must be joined to the registry base to become fetchable.
+RUN set -eux; \
+    REL="${REGISTRY_URL}/v1/releases/${JACIUP_VERSION}?product=${JACIUP_PRODUCT}"; \
+    DL=$(curl -fsSL "$REL" | jq -r '.assets[] | select(.name=="jaciup-x86_64-unknown-linux-gnu.zip") | .download_url'); \
+    if [ -z "$DL" ] || [ "$DL" = "null" ]; then \
+        echo "Could not resolve jaciup artifact URL for x86_64-unknown-linux-gnu"; \
+        exit 1; \
+    fi; \
+    curl -fSL --retry 3 -o /tmp/jaciup.zip "${REGISTRY_URL}${DL}"; \
+    unzip -o -q /tmp/jaciup.zip -d /tmp/jaciup; \
+    chmod +x /tmp/jaciup/jaciup; \
+    install -m 0755 /tmp/jaciup/jaciup /usr/local/bin/jaciup; \
+    rm -rf /tmp/jaciup /tmp/jaciup.zip
+
+# 2. Install a pinned toolchain via the version manager (rustup-style).
+#    `jaciup toolchain install <version>` downloads the Jaci engine from the
+#    API, verifies its SHA-256, and installs universal shims in ~/.jaciup/bin.
+#    Non-interactive: this is the only network step at build time.
+RUN set -eux; \
+    jaciup init -y || true; \
+    jaciup toolchain install "${TOOLCHAIN_VERSION}"; \
+    jaciup show
+
+# 3. Make the toolchain reachable for every job (shims are in ~/.jaciup/bin;
+#    expose the root-level ones too so PATH works for non-root runners).
+RUN set -eux; \
+    ln -sf "$HOME/.jaciup/bin" /opt/jaciup-bin 2>/dev/null || true; \
+    ls -1 "$HOME/.jaciup/bin" || true
+
+# 4. Persist PATH for every future container run.
+ENV PATH="/root/.jaciup/bin:${PATH}"
+
+# 5. Verify the install is functional (fails the build if not).
+RUN set -eux; \
+    command -v jaciup; \
+    command -v luau; \
+    luau --version; \
+    jaciup show

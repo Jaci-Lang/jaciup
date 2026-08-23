@@ -50,22 +50,32 @@ jobs:
 
           echo "Fetching latest Jaci release..."
 
-          RESPONSE="$(curl -fsSL "$API_URL")"
-
-          URL="$(
-            printf '%s' "$RESPONSE" |
-              jq -r '
-                (.assets // [])[]
-                | select(.name == "luau-x86_64-unknown-linux-gnu.zip")
-                | .download_url
-              ' |
-              head -n 1
-          )"
+          # The releases API is briefly inconsistent while a new release is
+          # being published; retry before failing.
+          RESPONSE=""
+          URL=""
+          for attempt in 1 2 3; do
+            RESPONSE="$(curl -fsSL "$API_URL" || true)"
+            URL="$(
+              printf '%s' "$RESPONSE" |
+                jq -r '
+                  (.assets // [])[]
+                  | select(.name == "luau-x86_64-unknown-linux-gnu.zip")
+                  | .download_url
+                ' 2>/dev/null |
+                head -n 1
+            )"
+            if [[ -n "$URL" && "$URL" != "null" ]]; then
+              break
+            fi
+            echo "Attempt $attempt: could not resolve engine artifact; retrying in $((attempt * 10))s..."
+            sleep $((attempt * 10))
+          done
 
           if [[ -z "$URL" || "$URL" == "null" ]]; then
             echo "Failed to find luau-x86_64-unknown-linux-gnu.zip"
             echo "Available assets:"
-            printf '%s' "$RESPONSE" | jq -r '(.assets // [])[] | .name'
+            printf '%s' "$RESPONSE" | jq -r '(.assets // [])[] | .name' 2>/dev/null || true
             exit 1
           fi
 

@@ -5,8 +5,31 @@ local Manager = require("../../toolchain/manager")
 local Config = require("../../core/config")
 local Term = require("@klur/term")
 
+local function printHelp()
+    Term.log(Term.bold("Usage: jaciup toolchain <action> [options]"))
+    Term.log("")
+    Term.log("Actions:")
+    Term.log("  install [channel]    Install a toolchain. Channel defaults to latest.")
+    Term.log("                       Examples: 'latest', 'dev', '0.313.0'")
+    Term.log("  list                 List installed toolchains.")
+    Term.log("  klur [channel]       (Re)install the KLUR layer for the active toolchain.")
+    Term.log("  uninstall <name>     Remove an installed toolchain.")
+    Term.log("  link <name> <path>   Link a local directory as a toolchain.")
+    Term.log("")
+    Term.log("Set the default with: " .. Term.cyan("jaciup default <name>"))
+    Term.log("")
+    Term.log("Examples:")
+    Term.log("  " .. Term.cyan("jaciup toolchain install") .. "        Install the latest toolchain")
+    Term.log("  " .. Term.cyan("jaciup toolchain link dev .") .. "      Use a local engine checkout")
+end
+
 return function(args: {string}): number
-    local subcmd = args[1] or "list"
+    local subcmd = args[1]
+
+    if subcmd == nil or subcmd == "" or subcmd == "help" or subcmd == "-h" or subcmd == "--help" then
+        printHelp()
+        return 0
+    end
 
     if subcmd == "list" then
         local installed = Manager.listInstalled()
@@ -15,6 +38,8 @@ return function(args: {string}): number
 
         if #installed == 0 then
             Term.log("No toolchains installed.")
+            Term.log("")
+            Term.log("Install one: " .. Term.cyan("jaciup toolchain install latest"))
             return 0
         end
 
@@ -58,8 +83,8 @@ return function(args: {string}): number
         return ok and 0 or 1
 
     else
-        Term.error("Unknown toolchain subcommand: " .. subcmd)
-        Term.log("Available subcommands: list, install, klur, uninstall, link")
+        Term.error("Unknown toolchain action: " .. subcmd)
+        Term.log("Run '" .. Term.cyan("jaciup toolchain help") .. "' for available actions.")
         return 1
     end
 end

@@ -4,6 +4,9 @@
 local Args = require("./args")
 local Term = require("@klur/term")
 local Manager = require("../toolchain/manager")
+local Env = require("../core/env")
+local Fs = require("@klur/fs")
+local Path = require("@klur/path")
 
 local VERSION = "0.1.0"
 
@@ -25,6 +28,21 @@ local function printHelp()
     local statusLine = if active ~= ""
         then Term.green(active) .. " (" .. reason .. ")"
         else Term.yellow("none") .. " (run 'jaciup toolchain install latest' to install)"
+
+    -- Surface the KLUR layer state: a toolchain that only has the engine
+    -- looks installed but cannot run klur, which is the most common
+    -- "nothing works" confusion.
+    local klurLine = ""
+    if active ~= "" then
+        local tcDir = Path.join(Env.getToolchainsDir(), active)
+        local klurBin = Path.join(tcDir, "klur")
+        local klurSrc = Path.join(tcDir, "src")
+        local hasKlur = Fs.isFile(klurBin) or Fs.isDir(klurSrc)
+        if not hasKlur then
+            klurLine =
+                "\n" .. Term.yellow("    KLUR layer:      missing in '" .. active .. "' (fix: jaciup toolchain klur)")
+        end
+    end
 
     print(string.format([[
 %s %s - The official Jaci & Luau toolchain manager
@@ -52,7 +70,7 @@ local function printHelp()
 
 %s
     Active toolchain: %s
-    Host architecture: %s-%s
+    Host architecture: %s-%s%s
 ]],
     Term.bold(Term.cyan("jaciup")),
     VERSION,
@@ -62,7 +80,8 @@ local function printHelp()
     Term.bold("STATUS:"),
     statusLine,
     process.os,
-    process.arch
+    process.arch,
+    klurLine
     ))
 end
 

@@ -102,8 +102,18 @@ function Manager.installKlur(tcDir: string, channel: string): string
     end
 
     -- Binary layout: the zip root carries a self-contained klur executable.
-    if Fs.isFile(Path.join(tcDir, "klur" .. ext)) or Fs.isFile(Path.join(tcDir, "klur")) then
-        return Manager.probeVersion(Path.join(tcDir, "klur" .. (Fs.isFile(Path.join(tcDir, "klur" .. ext)) and ext or "")), { "version" })
+    local klurBinName = "klur" .. (Fs.isFile(Path.join(tcDir, "klur" .. ext)) and ext or "")
+    if Fs.isFile(Path.join(tcDir, klurBinName)) then
+        local ver = Manager.probeVersion(Path.join(tcDir, klurBinName), { "version" })
+        if ver ~= "" then
+            return ver
+        end
+        -- A klur binary that cannot run is a stale or incompatible release
+        -- artifact. Remove it so shims and doctor stop trusting it.
+        Fs.removeFile(Path.join(tcDir, klurBinName))
+        Term.warn("KLUR binary from the registry did not run (stale or incompatible release).")
+        Term.log("The engine is installed; the KLUR layer needs a current klur release.")
+        return ""
     end
 
     -- Source layout: wrap the tree with a launcher that uses the sibling engine.
