@@ -86,7 +86,8 @@ trap 'rm -rf "$TMP"' EXIT
 # download_verify <product> <zip_name> <url> <dest>: fetch and verify the
 # published sha256 (the "<zip_name>.sha256" sidecar asset, when present).
 download_verify() {
-    local product="$1" name="$2" url="$3" dest="$4" expected actual sidecar
+    local product="$1" name="$2" url="$3" dest="$4"
+    local expected="" actual="" sidecar=""
     [[ "$url" == /* ]] && url="$BASE_URL$url"
     curl -fSL --retry 3 -o "$dest" "$url"
     sidecar="$(find_asset "$product" "$name.sha256")"

@@ -7,8 +7,9 @@ local Manager = require("../toolchain/manager")
 local Env = require("../core/env")
 local Fs = require("@klur/fs")
 local Path = require("@klur/path")
+local Version = require("../core/version")
 
-local VERSION = "0.1.0"
+local VERSION = Version.VERSION
 
 local showCmd = require("./commands/show_cmd")
 local defaultCmd = require("./commands/default_cmd")

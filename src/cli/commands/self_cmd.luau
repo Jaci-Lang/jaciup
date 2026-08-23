@@ -13,27 +13,22 @@ local Download = require("../../toolchain/download")
 local Fs = require("@klur/fs")
 local Path = require("@klur/path")
 local Term = require("@klur/term")
+local Version = require("../../core/version")
 
 local Self = {}
 
 -- Locate the directory that holds the running jaciup bootstrap (bin/).
 function Self.getSelfDir(): string?
-    -- Prefer the JACIUP_BIN env set by the launcher; fall back to process.args[0].
+    -- Prefer the JACIUP_BIN env set by the launcher; the installed binary
+    -- otherwise always lives in ~/.jaciup/bin.
     if process.env["JACIUP_BIN"] then
         return Path.dirname(process.env["JACIUP_BIN"])
-    end
-    if process.args and #process.args > 0 then
-        local a0 = process.args[1]
-        if a0 and a0 ~= "" then
-            return Path.dirname(a0)
-        end
     end
     return Env.getBinDir()
 end
 
 -- Pull the latest jaciup release for the current platform and install it.
 function Self.update(): boolean
-    local settings = Config.load()
     local registry = Config.getRegistryUrl()
     Term.log("info: querying releases API at " .. registry .. " for the latest jaciup release...")
 
@@ -44,13 +39,10 @@ function Self.update(): boolean
     end
 
     local version = release.version or release.tag
-    local artifact = Download.selectArtifact(release)
-    if not artifact or not artifact.url then
-        Term.error("No jaciup artifact available for " .. (require("../../core/platform").getTargetTriple()))
-        return false
-    end
 
     Env.ensureDirectories()
+    -- downloadAsset resolves the release manifest (artifacts with url and
+    -- sha256) and verifies the checksum after download.
     Term.log("info: downloading jaciup " .. tostring(version) .. "...")
     local archive = Download.downloadAsset(nil, tostring(version), {}, "jaciup")
     if not archive then
@@ -68,8 +60,8 @@ function Self.update(): boolean
         return false
     end
 
-    -- Install over the current bootstrap directory.
-    -- The archive contains a bin/ (jaciup launcher + shims) and src/ tree.
+    -- Install over the current bootstrap directory. The archive contains
+    -- the single jaciup binary.
     local ok = Fs.copyDir(tmpExtract, selfDir)
     if ok then
         Term.success("jaciup updated to " .. tostring(version) .. " in " .. selfDir)
@@ -96,7 +88,7 @@ return function(args: {string}): number
     elseif subcmd == "update" then
         return Self.update() and 0 or 1
     elseif subcmd == "info" or subcmd == "version" then
-        print("jaciup 0.1.0")
+        print("jaciup " .. Version.VERSION)
         return 0
     else
         Term.log("Usage: jaciup self <update|uninstall|info>")

@@ -205,6 +205,10 @@ jobs:
           cp artifacts/*.zip release-assets/
           cd release-assets
           sha256sum *.zip > SHA256SUMS.txt
+          # Per-zip sidecar files (the install scripts verify against these).
+          for zip in *.zip; do
+            awk -v f="$zip" '$2 == f { print $1 }' SHA256SUMS.txt > "$zip.sha256"
+          done
           echo "Release assets:"
           ls -lah
           echo
