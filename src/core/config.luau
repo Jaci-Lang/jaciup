@@ -17,7 +17,7 @@ local Config = {}
 
 local DEFAULT_SETTINGS: Settings = {
     defaultToolchain = "latest",
-    registryUrl = "https://cdn.jaci.dev",
+    registryUrl = "https://pop.squareweb.app",
     mirror = "https://github.com/Jaci-Lang/jaci",
     autoUpdate = true,
     installedToolchains = {},
@@ -31,7 +31,7 @@ function Config.getRegistryUrl(): string
         return process.env["JACIUP_REGISTRY_URL"]
     end
     local settings = Config.load()
-    return settings.registryUrl or DEFAULT_SETTINGS.registryUrl or "https://cdn.jaci.dev"
+    return settings.registryUrl or DEFAULT_SETTINGS.registryUrl or "https://pop.squareweb.app"
 end
 
 function Config.load(): Settings
