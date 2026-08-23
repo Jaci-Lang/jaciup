@@ -68,7 +68,7 @@ function Manager.install(channelOrVersion: string): boolean
     local tcDir = Path.join(Env.getToolchainsDir(), version)
 
     local settings = Config.load()
-    local mirror = settings.mirror or "https://github.com/klee-spec/jaci"
+    local mirror = settings.mirror or "https://github.com/Jaci-Lang/jaci"
 
     Term.log("info: syncing toolchain channel '" .. version .. "'")
     local candidates = Platform.getAssetCandidates()

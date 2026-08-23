@@ -18,7 +18,7 @@ local Config = {}
 local DEFAULT_SETTINGS: Settings = {
     defaultToolchain = "latest",
     registryUrl = "https://cdn.jaci.dev",
-    mirror = "https://github.com/klee-spec/jaci",
+    mirror = "https://github.com/Jaci-Lang/jaci",
     autoUpdate = true,
     installedToolchains = {},
 }
