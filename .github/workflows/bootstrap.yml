@@ -28,9 +28,9 @@ jobs:
 
       - name: Download Jaci Engine Bootstrap
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=luau" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
-          curl -fSL -o luau.zip "$URL"
-          unzip -o -q luau.zip -d /tmp/jaci
+          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaci" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
+          curl -fSL -o jaci.zip "$URL"
+          unzip -o -q jaci.zip -d /tmp/jaci
           chmod +x /tmp/jaci/*
           sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
 
