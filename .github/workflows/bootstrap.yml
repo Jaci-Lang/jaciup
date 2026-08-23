@@ -23,22 +23,58 @@ jobs:
   build-bootstrap:
     name: bootstrap-x86_64-unknown-linux-gnu
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Download Jaci Engine Bootstrap
         run: |
-          URL=$(curl -sL "https://pop.squareweb.app/v1/releases/latest?product=jaci" | jq -r '.artifacts["x86_64-unknown-linux-gnu"].url')
+          BASE_URL="https://pop.squareweb.app"
+
+          URL=$(curl -fsSL "$BASE_URL/v1/releases/latest?product=jaci" \
+            | jq -r '.artifacts[]
+              | select(.name == "luau-x86_64-unknown-linux-gnu.zip")
+              | .url' \
+            | head -n 1)
+
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "Failed to find Linux x86_64 Luau artifact"
+            exit 1
+          fi
+
+          case "$URL" in
+            http://*|https://*)
+              ;;
+            *)
+              URL="${BASE_URL}${URL}"
+              ;;
+          esac
+
+          echo "Downloading: $URL"
+
           curl -fSL -o jaci.zip "$URL"
+
+          mkdir -p /tmp/jaci
           unzip -o -q jaci.zip -d /tmp/jaci
-          chmod +x /tmp/jaci/*
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
+
+          chmod +x /tmp/jaci/luau
+          sudo cp /tmp/jaci/luau /usr/local/bin/luau
+
+          luau --version || true
 
       - name: Build Standalone Jaciup Binary
         run: |
           mkdir -p dist
-          luau --build src/init.luau --direct --codegen --strip -o dist/jaciup
+
+          luau \
+            --build src/init.luau \
+            --direct \
+            --codegen \
+            --strip \
+            -o dist/jaciup
+
           chmod +x dist/jaciup
+
           cd dist
           zip -j -9 ../jaciup-x86_64-unknown-linux-gnu.zip jaciup
 
@@ -51,15 +87,20 @@ jobs:
   publish-bootstrap:
     needs: build-bootstrap
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Determine Version Tag
         id: tag
         run: |
-          VER="${{ github.event.inputs.version }}"
-          [[ "$VER" != v* ]] && VER="v$VER"
-          echo "version=$VER" >> $GITHUB_OUTPUT
+          VER="${{ inputs.version }}"
+
+          if [[ "$VER" != v* ]]; then
+            VER="v$VER"
+          fi
+
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -68,12 +109,17 @@ jobs:
       - name: Prepare Release Assets & Checksums
         run: |
           mkdir -p release-assets
-          find artifacts -name "*.zip" -exec cp {} release-assets/ \;
+
+          find artifacts -type f -name "*.zip" -exec cp {} release-assets/ \;
+
           cd release-assets
+
           for f in *.zip; do
             sha256sum "$f" | awk '{print $1}' > "$f.sha256"
           done
+
           sha256sum *.zip > SHA256SUMS.txt
+
           ls -la
 
       - name: Create GitHub Bootstrap Release
@@ -81,8 +127,8 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.version }}
           name: Jaciup Bootstrap ${{ steps.tag.outputs.version }}
-          draft: ${{ github.event.inputs.draft || false }}
-          prerelease: ${{ github.event.inputs.prerelease || false }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             release-assets/*
           generate_release_notes: true
