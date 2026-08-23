@@ -46,7 +46,7 @@ function Self.update(): boolean
     local version = release.version or release.tag
     local artifact = Download.selectArtifact(release)
     if not artifact or not artifact.url then
-        Term.error("No jaciup artifact available for " .. (require("../core/platform").getTargetTriple()))
+        Term.error("No jaciup artifact available for " .. (require("../../core/platform").getTargetTriple()))
         return false
     end
 
