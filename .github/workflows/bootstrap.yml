@@ -28,6 +28,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clone KLUR
+        # The bootstrap build compiles jaciup's @klur/* requires against the
+        # KLUR stdlib; .luaurc aliases it to ../klur/src/std, so the klur
+        # repo must be checked out as a sibling.
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git clone --depth 1 \
+            https://github.com/Jaci-Lang/klur.git \
+            ../klur
+
       - name: Download Jaci Engine Bootstrap
         shell: bash
         run: |
