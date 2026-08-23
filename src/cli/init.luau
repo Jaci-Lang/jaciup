@@ -16,6 +16,7 @@ local runCmd = require("./commands/run_cmd")
 local initCmd = require("./commands/init_cmd")
 local completionsCmd = require("./commands/completions_cmd")
 local selfCmd = require("./commands/self_cmd")
+local extensionCmd = require("./commands/extension_cmd")
 
 local function printHelp()
     local active, reason = Manager.resolveActiveToolchain()
@@ -34,7 +35,8 @@ local function printHelp()
     default <toolchain>  Set the default toolchain
     update [toolchain]   Update installed toolchains
     toolchain <action>   Manage toolchains (install, uninstall, list, link)
-    which <binary>       Display the binary path for the active toolchain
+    extension <action>   Manage toolchain extensions & components (lsp, docs, sidecars)
+    which <binary>       Display the binary path for the active toolchain (e.g. luau-lsp)
     run <tc> <cmd...>    Run a command with a specific toolchain
     init                 Initialize jaciup directory, shims, and shell PATH
     completions <shell>  Generate shell completion scripts (bash, zsh, fish, powershell)
@@ -82,6 +84,8 @@ function CLI.run(rawArgs: {string}): number
         return defaultCmd(parsed.args)
     elseif cmd == "toolchain" then
         return toolchainCmd(parsed.args)
+    elseif cmd == "extension" or cmd == "component" or cmd == "extensions" or cmd == "components" then
+        return extensionCmd(parsed.args)
     elseif cmd == "update" then
         return updateCmd(parsed.args)
     elseif cmd == "which" then

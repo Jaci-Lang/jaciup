@@ -14,6 +14,8 @@ local SHIMMED_BINARIES = {
     "luau-analyze",
     "luau-compile",
     "luau-ast",
+    "luau-lsp",
+    "jaci-lsp",
     "klur",
 }
 
@@ -35,8 +37,13 @@ fi
 JACIUP_DIR="${JACIUP_HOME:-$HOME/.jaciup}"
 if [ -f "$JACIUP_DIR/settings.toml" ]; then
     DEFAULT_TC="$(grep -E '^default_toolchain[[:space:]]*=' "$JACIUP_DIR/settings.toml" | head -n1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')"
-    if [ -n "$DEFAULT_TC" ] && [ -x "$JACIUP_DIR/toolchains/$DEFAULT_TC/%s" ]; then
-        exec "$JACIUP_DIR/toolchains/$DEFAULT_TC/%s" "$@"
+    if [ -n "$DEFAULT_TC" ]; then
+        if [ -x "$JACIUP_DIR/toolchains/$DEFAULT_TC/%s" ]; then
+            exec "$JACIUP_DIR/toolchains/$DEFAULT_TC/%s" "$@"
+        fi
+        if [ -x "$JACIUP_DIR/extensions/%s" ]; then
+            exec "$JACIUP_DIR/extensions/%s" "$@"
+        fi
     fi
 fi
 
@@ -44,7 +51,7 @@ echo "jaciup: error: no toolchain installed providing '%s'" >&2
 echo "Run 'jaciup toolchain install latest' or 'jaciup default <version>' to install one." >&2
 exit 1
 ]==]
-    return string.format(script, binaryName, binaryName, binaryName, binaryName, binaryName)
+    return string.format(script, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 end
 
 function Proxy.generateWindowsShim(binaryName: string): string

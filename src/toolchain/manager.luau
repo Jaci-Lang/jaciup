@@ -70,29 +70,36 @@ function Manager.install(channelOrVersion: string): boolean
     local settings = Config.load()
     local mirror = settings.mirror or "https://github.com/klee-spec/jaci"
 
-    Term.log("Installing Jaci toolchain '" .. version .. "'...")
-    local ok = Download.fetchReleaseArchive(mirror, version, tcDir)
-    if not ok then
+    Term.log("info: syncing toolchain channel '" .. version .. "'")
+    local candidates = Platform.getAssetCandidates()
+    local downloadedZip = Download.downloadAsset(mirror, version, candidates)
+
+    if not downloadedZip then
+        Term.error("Could not download toolchain release for '" .. version .. "' on " .. process.os .. "-" .. process.arch)
         return false
     end
 
-    -- Update settings
+    Fs.mkdirp(tcDir)
+    local ok = Download.extractZip(downloadedZip, tcDir)
+    if not ok then
+        Term.error("Failed to unpack toolchain archive: " .. downloadedZip)
+        return false
+    end
+
     settings.installedToolchains = settings.installedToolchains or {}
     settings.installedToolchains[version] = true
-    if not settings.defaultToolchain or settings.defaultToolchain == "latest" or settings.defaultToolchain == "" then
+    if not settings.defaultToolchain or settings.defaultToolchain == "latest" then
         settings.defaultToolchain = version
     end
     Config.save(settings)
 
-    -- Ensure universal shims are installed in ~/.jaciup/bin
     Proxy.installShims()
-
-    Term.success("Toolchain '" .. version .. "' installed successfully!")
+    Term.success("Toolchain '" .. version .. "' installed successfully and set as default.")
     return true
 end
 
-function Manager.uninstall(version: string): boolean
-    local cleanVer = version:gsub("^v", "")
+function Manager.uninstall(channelOrVersion: string): boolean
+    local cleanVer = channelOrVersion:gsub("^v", "")
     local tcDir = Path.join(Env.getToolchainsDir(), cleanVer)
 
     if not Fs.isDir(tcDir) then
@@ -148,18 +155,47 @@ end
 
 function Manager.which(binaryName: string, dir: string?): string?
     local active, _reason = Manager.resolveActiveToolchain(dir)
+    if active == "" then return nil end
+
     local tcDir = Path.join(Env.getToolchainsDir(), active)
     local ext = Platform.getExecutableSuffix()
 
-    local candidate = Path.join(tcDir, binaryName .. ext)
-    if Fs.isFile(candidate) then
-        return candidate
+    -- Search variants (e.g. luau-lsp <-> jaci-lsp)
+    local searchNames = { binaryName }
+    if binaryName == "luau-lsp" or binaryName == "jaci-lsp" or binaryName == "lsp" then
+        searchNames = { "luau-lsp", "jaci-lsp", "lsp" }
     end
 
-    -- Also check in case binary is directly inside root without extension or with .exe
-    local candidateNoExt = Path.join(tcDir, binaryName)
-    if Fs.isFile(candidateNoExt) then
-        return candidateNoExt
+    -- 1. Check in active toolchain root and bin/
+    for _, name in ipairs(searchNames) do
+        local cand1 = Path.join(tcDir, name .. ext)
+        local cand2 = Path.join(tcDir, name)
+        local cand3 = Path.join(tcDir, "bin", name .. ext)
+        local cand4 = Path.join(tcDir, "bin", name)
+        for _, c in ipairs({cand1, cand2, cand3, cand4}) do
+            if Fs.isFile(c) then
+                return c
+            end
+        end
+    end
+
+    -- 2. Check in toolchain-specific extensions and global extensions
+    local extDirs = {
+        Path.join(Env.getExtensionsDir(), active),
+        Env.getExtensionsDir(),
+    }
+    for _, edir in ipairs(extDirs) do
+        for _, name in ipairs(searchNames) do
+            local cand1 = Path.join(edir, name .. ext)
+            local cand2 = Path.join(edir, name)
+            local cand3 = Path.join(edir, "bin", name .. ext)
+            local cand4 = Path.join(edir, "bin", name)
+            for _, c in ipairs({cand1, cand2, cand3, cand4}) do
+                if Fs.isFile(c) then
+                    return c
+                end
+            end
+        end
     end
 
     return nil
