@@ -1,58 +1,70 @@
 # jaciup
 
-**jaciup** is the official, pure Luau toolchain installer and version manager for the Jaci & Luau ecosystem (inspired by `rustup`).
+**jaciup** is the toolchain manager for Jaci (the Luau fork). It installs,
+updates, and switches between toolchain versions, and puts `luau`,
+`luau-analyze`, `luau-compile`, and `klur` on your PATH. Same model as
+`rustup`, for the Jaci ecosystem. Written in pure Luau, shipped as a single
+binary.
 
----
+A **toolchain** is one version of the Jaci engine (`luau`, `luau-analyze`,
+`luau-compile`, `luau-ast`) plus the KLUR layer (`klur`), installed to
+`~/.jaciup/toolchains/<version>/`. jaciup writes small shims into
+`~/.jaciup/bin` that point at the active toolchain, so one PATH entry works
+everywhere.
 
-## Features
+## Install
 
-- **Seamless Toolchain Management**: Install, update, list, and switch between multiple Jaci/Luau versions.
-- **Universal Binary Shims**: Provides automatic PATH shims (`luau`, `luau-analyze`, `luau-compile`, `luau-ast`, `klur`).
-- **Project Pinning**: Automatically detects and respects `jaciup-toolchain.toml` or `jaci-toolchain.toml` per directory.
-- **Cross-Platform Shell Integration**: Auto-configures `bash`, `zsh`, `fish`, `powershell`, and Windows system PATH.
-- **100% Pure Luau**: Zero external runtime dependencies. Compiles to a single standalone executable.
+macOS / Linux:
 
----
-
-## Quick Start
-
-```sh
-# Initialize jaciup and setup PATH shims
-jaciup init
-
-# Show active and installed toolchains
-jaciup show
-
-# Set the default global toolchain
-jaciup default 0.10.0
-
-# Install a specific release
-jaciup toolchain install 0.10.0
-
-# Link a local development build
-jaciup toolchain link dev /path/to/jaci/build
-
-# Query binary path for active toolchain
-jaciup which luau
-
-# Run a command under a specific toolchain
-jaciup run 0.9.0 luau script.luau
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scripts/install.sh | bash
 ```
 
----
+Windows (PowerShell):
 
-## Project Toolchain Pinning (`jaciup-toolchain.toml`)
+```powershell
+iwr -UseBasicParsing https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scripts/install.ps1 -OutFile install.ps1
+./install.ps1
+```
 
-Pin your project's compiler and runtime version by adding a `jaciup-toolchain.toml` in your repository:
+The installer places `jaciup` in `~/.jaciup/bin`, adds it to your PATH, and
+configures your shell (bash, zsh, fish, PowerShell). Then install a toolchain:
+
+```bash
+jaciup toolchain install latest
+```
+
+`install.sh --with-toolchain` does both in one step.
+
+## Usage
+
+```bash
+jaciup show                       # active and installed toolchains
+jaciup toolchain install 0.313.0  # install a specific version
+jaciup default 0.313.0            # set the default toolchain
+jaciup which luau                 # where `luau` resolves
+jaciup doctor                     # diagnose toolchains, shims, PATH
+jaciup run dev luau script.luau   # run under a specific toolchain
+```
+
+## Project pinning
+
+Drop a `jaciup-toolchain.toml` in a repository and every `luau`/`klur` call
+inside it uses the pinned toolchain:
 
 ```toml
 [toolchain]
-channel = "0.10.0"
+channel = "0.313.0"
 ```
 
-Any invocation of `luau`, `luau-analyze`, or `klur` inside that directory will automatically use the pinned toolchain.
+## Layout
 
----
+```
+~/.jaciup/
+├── bin/           # shims (luau, klur, ...) — this directory goes on PATH
+├── toolchains/    # installed toolchains, one directory per version
+└── settings.toml  # default toolchain, registry mirror
+```
 
 ## License
 
