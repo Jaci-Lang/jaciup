@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -e
+
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ -n "$JACI_BIN" ] && [ -x "$JACI_BIN" ]; then
+    exec "$JACI_BIN" "$DIR/src/init.luau" -a "$@"
+fi
+
+if [ -n "$LUAU_BIN" ] && [ -x "$LUAU_BIN" ]; then
+    exec "$LUAU_BIN" "$DIR/src/init.luau" -a "$@"
+fi
+
+if [ -x "$DIR/../build/luau" ]; then
+    exec "$DIR/../build/luau" "$DIR/src/init.luau" -a "$@"
+fi
+
+if command -v luau >/dev/null 2>&1; then
+    exec luau "$DIR/src/init.luau" -a "$@"
+fi
+
+echo "jaciup: error: luau binary not found in PATH or environment" >&2
+exit 1

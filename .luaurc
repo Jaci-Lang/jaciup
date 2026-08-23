@@ -1,0 +1,7 @@
+{
+    "languageMode": "strict",
+    "aliases": {
+        "klur": "./klur_modules/@klur",
+        "jaciup": "./src"
+    }
+}

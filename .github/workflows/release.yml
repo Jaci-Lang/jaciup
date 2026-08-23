@@ -1,0 +1,126 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        description: "Release version (e.g. 0.1.0 or v0.1.0)"
+      draft:
+        type: boolean
+        description: "Create as draft release"
+        default: false
+      prerelease:
+        type: boolean
+        description: "Mark as prerelease"
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [{name: linux-x64, runner: ubuntu-22.04}, {name: macos-x64, runner: macos-13}, {name: macos-arm64, runner: macos-14}, {name: windows-x64, runner: windows-latest}]
+    name: build-${{ matrix.os.name }}
+    runs-on: ${{ matrix.os.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Jaci Engine Bootstrap (Ubuntu)
+        if: matrix.os.name == 'linux-x64'
+        run: |
+          curl -fsSL -o luau-ubuntu.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-ubuntu.zip || curl -fsSL -o luau-ubuntu.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-linux-x64.zip
+          unzip -o -q luau-ubuntu.zip -d /tmp/jaci
+          chmod +x /tmp/jaci/*
+          sudo cp /tmp/jaci/luau /usr/local/bin/luau || sudo cp /tmp/jaci/luau* /usr/local/bin/luau || true
+
+      - name: Download Jaci Engine Bootstrap (macOS)
+        if: matrix.os.name == 'macos-x64' || matrix.os.name == 'macos-arm64'
+        run: |
+          curl -fsSL -o luau-macos.zip https://github.com/klee-spec/jaci/releases/latest/download/luau-macos.zip
+          unzip -o -q luau-macos.zip -d /tmp/jaci
+          chmod +x /tmp/jaci/*
+          sudo cp /tmp/jaci/luau /usr/local/bin/luau || cp /tmp/jaci/luau /usr/local/bin/luau || true
+
+      - name: Download Jaci Engine Bootstrap (Windows)
+        if: matrix.os.name == 'windows-x64'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri https://github.com/klee-spec/jaci/releases/latest/download/luau-windows.zip -OutFile luau-windows.zip
+          Expand-Archive -Path luau-windows.zip -DestinationPath C:\jaci -Force
+          echo "C:\jaci" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install KLUR CLI
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/Jaci-Lang/klur.git /tmp/klur
+          chmod +x /tmp/klur/bin/klur
+          sudo cp /tmp/klur/bin/klur /usr/local/bin/klur || true
+
+      - name: Build Standalone Jaciup Binary (Unix)
+        if: matrix.os.name != 'windows-x64'
+        run: |
+          mkdir -p dist
+          luau --build src/init.luau --direct --codegen --strip -o dist/jaciup
+          chmod +x dist/jaciup
+          cd dist
+          zip -j -9 ../jaciup-${{ matrix.os.name }}.zip jaciup
+
+      - name: Build Standalone Jaciup Binary (Windows)
+        if: matrix.os.name == 'windows-x64'
+        run: |
+          mkdir -p dist
+          luau.exe --build src/init.luau --direct --codegen --strip -o dist/jaciup.exe
+          7z a -mx=9 jaciup-${{ matrix.os.name }}.zip .\dist\jaciup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jaciup-${{ matrix.os.name }}
+          path: jaciup-${{ matrix.os.name }}.zip
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Version Tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+            [[ "$VER" != v* ]] && VER="v$VER"
+            echo "version=$VER" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Assets & Checksums
+        run: |
+          mkdir -p release-assets
+          find artifacts -name "*.zip" -exec cp {} release-assets/ \;
+          cd release-assets
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: ${{ steps.tag.outputs.version }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          files: |
+            release-assets/*.zip
+            release-assets/SHA256SUMS.txt
+          generate_release_notes: true

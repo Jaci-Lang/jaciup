@@ -1,0 +1,13 @@
+return {
+    name = "jaciup",
+    version = "0.1.0",
+    description = "The official pure Luau toolchain installer and manager for Jaci",
+    main = "src/init.luau",
+    license = "MIT",
+    scripts = {
+        ["start"] = "klur run src/init.luau",
+        ["test"] = "klur test",
+        ["build"] = "klur build src/init.luau --output dist/jaciup",
+    },
+    dependencies = {},
+}
