@@ -31,6 +31,13 @@ function Env.getToolchainsDir(): string
     return Path.join(Env.getJaciupHome(), "toolchains")
 end
 
+function Env.getExtensionsDir(): string
+    if process.env["JACIUP_EXTENSIONS"] and process.env["JACIUP_EXTENSIONS"] ~= "" then
+        return process.env["JACIUP_EXTENSIONS"]
+    end
+    return Path.join(Env.getJaciupHome(), "extensions")
+end
+
 function Env.getDownloadsDir(): string
     return Path.join(Env.getJaciupHome(), "downloads")
 end
@@ -43,6 +50,7 @@ function Env.ensureDirectories()
     Fs.mkdirp(Env.getJaciupHome())
     Fs.mkdirp(Env.getBinDir())
     Fs.mkdirp(Env.getToolchainsDir())
+    Fs.mkdirp(Env.getExtensionsDir())
     Fs.mkdirp(Env.getDownloadsDir())
 end
 

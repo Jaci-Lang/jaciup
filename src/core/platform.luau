@@ -37,35 +37,60 @@ function Platform.getExecutableSuffix(): string
     return Platform.isWindows() and ".exe" or ""
 end
 
-function Platform.getAssetCandidates(): {string}
+function Platform.getTargetTriple(): string
     local osName = Platform.getOS()
     local arch = Platform.getArch()
 
     if osName == "linux" then
-        return {
-            "luau-linux-x64.zip",
-            "luau-ubuntu.zip",
-            "luau-linux.zip",
-        }
+        if arch == "arm64" then
+            return "aarch64-unknown-linux-gnu"
+        else
+            return "x86_64-unknown-linux-gnu"
+        end
     elseif osName == "macos" then
         if arch == "arm64" then
-            return {
-                "luau-macos-arm64.zip",
-                "luau-macos.zip",
-            }
+            return "aarch64-apple-darwin"
         else
-            return {
-                "luau-macos-x64.zip",
-                "luau-macos.zip",
-            }
+            return "x86_64-apple-darwin"
         end
     elseif osName == "windows" then
-        return {
-            "luau-windows-x64.zip",
-            "luau-windows.zip",
-        }
+        if arch == "arm64" then
+            return "aarch64-pc-windows-msvc"
+        else
+            return "x86_64-pc-windows-msvc"
+        end
     end
-    return { "luau-" .. osName .. ".zip" }
+    return "x86_64-unknown-linux-gnu"
+end
+
+function Platform.getAssetCandidates(pkgName: string?): {string}
+    local pkg = pkgName or "jaci"
+    local triple = Platform.getTargetTriple()
+    local osName = Platform.getOS()
+    local arch = Platform.getArch()
+
+    local candidates = {
+        pkg .. "-" .. triple .. ".zip",
+    }
+
+    if osName == "linux" then
+        table.insert(candidates, "luau-linux-x64.zip")
+        table.insert(candidates, "luau-ubuntu.zip")
+        table.insert(candidates, "luau-linux.zip")
+    elseif osName == "macos" then
+        if arch == "arm64" then
+            table.insert(candidates, "luau-macos-arm64.zip")
+        else
+            table.insert(candidates, "luau-macos-x64.zip")
+        end
+        table.insert(candidates, "luau-macos.zip")
+    elseif osName == "windows" then
+        table.insert(candidates, "luau-windows-x64.zip")
+        table.insert(candidates, "luau-windows.zip")
+    end
+
+    table.insert(candidates, pkg .. "-" .. osName .. ".zip")
+    return candidates
 end
 
 return Platform
