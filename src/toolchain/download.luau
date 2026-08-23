@@ -220,16 +220,17 @@ function Download.selectArtifact(release: any): any?
     local osName = Platform.getOS()        -- linux | macos | windows
     local arch = Platform.getArch()       -- x64 | arm64
 
-    -- Normalize target triple fragments the API uses.
-    local function archOf(a: string?): string
-        if not a then return "" end
+    -- Normalize target triple fragments the API uses. Non-string values
+    -- (e.g. a JSON null sentinel from older engines) count as absent.
+    local function archOf(a: any): string
+        if type(a) ~= "string" then return "" end
         a = a:lower()
         if a == "x86_64" or a == "x64" or a == "amd64" then return "x64" end
         if a == "aarch64" or a == "arm64" then return "arm64" end
         return a
     end
-    local function osOf(o: string?): string
-        if not o then return "" end
+    local function osOf(o: any): string
+        if type(o) ~= "string" then return "" end
         o = o:lower()
         if o == "darwin" or o == "macos" then return "macos" end
         if o == "linux" then return "linux" end
@@ -245,8 +246,9 @@ function Download.selectArtifact(release: any): any?
     if artifacts and type(artifacts) == "table" and #artifacts > 0 then
         local fallback = nil
         for _, art in ipairs(artifacts) do
-            if art.available ~= false and art.url and art.url ~= "" then
-                local name = art.name or ""
+            local artUrl = type(art.url) == "string" and art.url or ""
+            if art.available ~= false and artUrl ~= "" then
+                local name = type(art.name) == "string" and art.name or ""
                 if name:lower():match("%.zip$") then
                     local t = art.target or {}
                     local tOs = osOf(t.os)
@@ -312,22 +314,23 @@ function Download.downloadAsset(repoUrl: string?, version: string, candidates: {
     local manifest = Download.getManifest(cleanVersion, prod) or release
 
     local artifact = Download.selectArtifact(manifest) or Download.selectArtifact(release)
-    if not artifact or not artifact.url then
-        Term.error("No matching release artifact for " .. Platform.getTargetTriple() .. " (product '" .. prod .. "')" )
+    local artUrl = artifact and type(artifact.url) == "string" and artifact.url or ""
+    if artUrl == "" then
+        Term.error("No matching release artifact for " .. Platform.getTargetTriple() .. " (product '" .. prod .. "')")
         return nil
     end
 
-    local name = artifact.name or (prod .. "-" .. cleanVersion .. ".zip")
+    local name = type(artifact.name) == "string" and artifact.name or (prod .. "-" .. cleanVersion .. ".zip")
     local targetPath = Path.join(downloadsDir, name)
-    Term.log("info: downloading " .. name .. " from " .. Download.resolveUrl(artifact.url))
+    Term.log("info: downloading " .. name .. " from " .. Download.resolveUrl(artUrl))
 
-    local ok = Download.downloadFile(artifact.url, targetPath)
+    local ok = Download.downloadFile(artUrl, targetPath)
     if not ok then
         Term.error("Failed to download " .. name)
         return nil
     end
 
-    local sha = artifact.sha256 or ""
+    local sha = type(artifact.sha256) == "string" and artifact.sha256 or ""
     if sha ~= "" then
         Term.log("info: verifying SHA-256 checksum...")
         if not Download.verifySha256(targetPath, sha) then
