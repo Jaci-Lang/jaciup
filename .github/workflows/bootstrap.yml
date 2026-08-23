@@ -25,45 +25,77 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Download Jaci Engine Bootstrap
+        shell: bash
         run: |
+          set -euo pipefail
+
           BASE_URL="https://pop.squareweb.app"
+          API_URL="${BASE_URL}/v1/releases/latest?product=jaci"
 
-          URL=$(curl -fsSL "$BASE_URL/v1/releases/latest?product=jaci" \
-            | jq -r '.artifacts[]
-              | select(.name == "luau-x86_64-unknown-linux-gnu.zip")
-              | .url' \
-            | head -n 1)
+          echo "Fetching latest Jaci release..."
 
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "Failed to find Linux x86_64 Luau artifact"
+          RESPONSE="$(curl -fsSL "$API_URL")"
+
+          URL="$(
+            printf '%s' "$RESPONSE" |
+              jq -r '
+                (.assets // [])[]
+                | select(.name == "luau-x86_64-unknown-linux-gnu.zip")
+                | .download_url
+              ' |
+              head -n 1
+          )"
+
+          if [[ -z "$URL" || "$URL" == "null" ]]; then
+            echo "Failed to find luau-x86_64-unknown-linux-gnu.zip"
+            echo "Available assets:"
+            printf '%s' "$RESPONSE" | jq -r '(.assets // [])[] | .name'
             exit 1
           fi
 
-          case "$URL" in
-            http://*|https://*)
-              ;;
-            *)
-              URL="${BASE_URL}${URL}"
-              ;;
-          esac
+          if [[ "$URL" == /* ]]; then
+            URL="${BASE_URL}${URL}"
+          fi
 
           echo "Downloading: $URL"
 
-          curl -fSL -o jaci.zip "$URL"
+          curl -fSL \
+            --retry 3 \
+            --retry-delay 2 \
+            -o jaci.zip \
+            "$URL"
 
+          rm -rf /tmp/jaci
           mkdir -p /tmp/jaci
+
           unzip -o -q jaci.zip -d /tmp/jaci
 
-          chmod +x /tmp/jaci/luau
-          sudo cp /tmp/jaci/luau /usr/local/bin/luau
+          echo "Extracted files:"
+          find /tmp/jaci -maxdepth 2 -type f -print
 
+          LUAU_BIN="$(find /tmp/jaci -type f -name luau | head -n 1)"
+
+          if [[ -z "$LUAU_BIN" ]]; then
+            echo "Could not find luau binary in archive"
+            exit 1
+          fi
+
+          chmod +x "$LUAU_BIN"
+          sudo cp "$LUAU_BIN" /usr/local/bin/luau
+
+          echo "Installed Luau:"
+          command -v luau
           luau --version || true
 
       - name: Build Standalone Jaciup Binary
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p dist
 
           luau \
@@ -75,25 +107,34 @@ jobs:
 
           chmod +x dist/jaciup
 
+          test -f dist/jaciup
+
           cd dist
           zip -j -9 ../jaciup-x86_64-unknown-linux-gnu.zip jaciup
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Bootstrap Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: jaciup-bootstrap-x86_64-unknown-linux-gnu
           path: jaciup-x86_64-unknown-linux-gnu.zip
+          if-no-files-found: error
           retention-days: 1
 
   publish-bootstrap:
+    name: publish-bootstrap
     needs: build-bootstrap
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Determine Version Tag
         id: tag
+        shell: bash
         run: |
+          set -euo pipefail
+
           VER="${{ inputs.version }}"
 
           if [[ "$VER" != v* ]]; then
@@ -101,26 +142,40 @@ jobs:
           fi
 
           echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VER"
 
-      - uses: actions/download-artifact@v4
+      - name: Download Bootstrap Artifact
+        uses: actions/download-artifact@v4
         with:
+          name: jaciup-bootstrap-x86_64-unknown-linux-gnu
           path: artifacts
 
-      - name: Prepare Release Assets & Checksums
+      - name: Prepare Release Assets and Checksums
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p release-assets
 
-          find artifacts -type f -name "*.zip" -exec cp {} release-assets/ \;
+          cp \
+            artifacts/jaciup-x86_64-unknown-linux-gnu.zip \
+            release-assets/jaciup-x86_64-unknown-linux-gnu.zip
 
           cd release-assets
 
-          for f in *.zip; do
-            sha256sum "$f" | awk '{print $1}' > "$f.sha256"
-          done
+          sha256sum \
+            jaciup-x86_64-unknown-linux-gnu.zip \
+            > SHA256SUMS.txt
 
-          sha256sum *.zip > SHA256SUMS.txt
+          awk '{print $1}' SHA256SUMS.txt \
+            > jaciup-x86_64-unknown-linux-gnu.zip.sha256
 
-          ls -la
+          echo "Release assets:"
+          ls -lah
+
+          echo
+          echo "Checksums:"
+          cat SHA256SUMS.txt
 
       - name: Create GitHub Bootstrap Release
         uses: softprops/action-gh-release@v2
@@ -129,6 +184,8 @@ jobs:
           name: Jaciup Bootstrap ${{ steps.tag.outputs.version }}
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
-          files: |
-            release-assets/*
           generate_release_notes: true
+          files: |
+            release-assets/jaciup-x86_64-unknown-linux-gnu.zip
+            release-assets/jaciup-x86_64-unknown-linux-gnu.zip.sha256
+            release-assets/SHA256SUMS.txt
