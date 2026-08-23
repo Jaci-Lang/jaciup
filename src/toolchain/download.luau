@@ -45,7 +45,7 @@ end
 
 -- Fetch raw text over HTTP. Prefer the native net global (pure Luau, works
 -- inside the single-binary compiler), then curl/wget as fallbacks.
-function Download.fetchText(url: string): (string, number)?
+function Download.fetchText(url: string): any
     local target = Download.resolveUrl(url)
     if not target:match("^https?://") then
         target = url
@@ -96,7 +96,7 @@ function Download.fetchJson(url: string): any
     local raw = Download.fetchText(url)
     if not raw then return nil end
     local ok, data = pcall(function()
-        return Serde.json.parse(raw)
+        return Serde.parseJson(raw)
     end)
     if ok and data then
         return data
