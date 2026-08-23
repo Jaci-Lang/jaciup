@@ -20,11 +20,11 @@ return function(_args: {string}): number
     -- 3. Configure shell PATH
     Profile.configurePath()
 
-    -- 4. If no toolchain installed, prompt or install latest
+    -- 4. If no toolchain is installed, point at the install command.
+    -- Init stays lightweight: it only sets up shims and PATH.
     local installed = Manager.listInstalled()
     if #installed == 0 then
-        Term.log("No toolchain installed yet. Installing latest Jaci release...")
-        Manager.install("latest")
+        Term.log("No toolchain installed yet: run " .. Term.cyan("jaciup toolchain install latest"))
     end
 
     Term.success(Term.bold("Jaciup initialization complete!"))

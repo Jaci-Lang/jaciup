@@ -7,6 +7,10 @@
 # adds the bin directory to the user PATH, then runs `jaciup init` to
 # install the shims (luau, klur, ...) and patch the PowerShell profile.
 
+param(
+    [switch]$NoToolchain
+)
+
 $ErrorActionPreference = "Stop"
 
 $Base = "https://pop.squareweb.app"
@@ -95,6 +99,16 @@ if ($userPath -notlike "*$BinDir*") {
 # Shims (luau, klur, ...) and the PowerShell profile patch.
 & (Join-Path $BinDir "jaciup.exe") init
 
+if (-not $NoToolchain) {
+    Write-Host ""
+    Write-Host "Installing and activating the latest toolchain (engine + KLUR)..."
+    & (Join-Path $BinDir "jaciup.exe") toolchain install latest
+}
+
 Write-Host ""
 Write-Host "jaciup installed: $BinDir\jaciup.exe"
-Write-Host "Open a new terminal, then run:  jaciup toolchain install latest"
+if (-not $NoToolchain) {
+    Write-Host "Open a new terminal, then run:  luau --version && klur version"
+} else {
+    Write-Host "Open a new terminal, then run:  jaciup toolchain install latest"
+}

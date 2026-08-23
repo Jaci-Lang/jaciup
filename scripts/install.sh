@@ -3,24 +3,26 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scripts/install.sh | bash
 #
-# Installs jaciup to ~/.jaciup (override with JACIUP_HOME), then runs
-# `jaciup init` to install the shims (luau, klur, ...) and patch the
-# shell PATH for bash, zsh, and fish.
+# Installs jaciup to ~/.jaciup (override with JACIUP_HOME), installs and
+# activates the latest engine + KLUR toolchain, then runs `jaciup init`
+# to install the shims (luau, klur, ...) and patch the shell PATH for
+# bash, zsh, and fish.
 #
 # Options:
-#   --with-toolchain   Also install the latest engine + KLUR toolchain.
+#   --no-toolchain   Do not install the toolchain (jaciup only).
 
 set -euo pipefail
 
 BASE_URL="https://pop.squareweb.app"
 INSTALL_DIR="${JACIUP_HOME:-$HOME/.jaciup}"
-WITH_TOOLCHAIN=0
+WITH_TOOLCHAIN=1
 
 for arg in "$@"; do
     case "$arg" in
         --with-toolchain) WITH_TOOLCHAIN=1 ;;
+        --no-toolchain) WITH_TOOLCHAIN=0 ;;
         -h|--help)
-            echo "Usage: install.sh [--with-toolchain]"
+            echo "Usage: install.sh [--no-toolchain]"
             exit 0
             ;;
         *)
@@ -163,7 +165,16 @@ fi
 "$JACIUP_BIN" init
 
 if [[ "$WITH_TOOLCHAIN" -eq 1 ]]; then
-    "$JACIUP_BIN" toolchain install latest
+    # Older released jaciup versions auto-install during 'init'; skip the
+    # second download in that case.
+    if ls "$INSTALL_DIR"/toolchains/*/luau >/dev/null 2>&1; then
+        echo ""
+        echo "Toolchain already installed (by jaciup init) and activated."
+    else
+        echo ""
+        echo "Installing and activating the latest toolchain (engine + KLUR)..."
+        "$JACIUP_BIN" toolchain install latest
+    fi
 fi
 
 echo ""
@@ -172,7 +183,7 @@ echo "Shell PATH updated for bash, zsh, and fish (open a new shell, or run:)"
 echo "  export PATH=\"$INSTALL_DIR/bin:\$PATH\""
 echo ""
 if [[ "$WITH_TOOLCHAIN" -eq 1 ]]; then
-    echo "Toolchain installed. Try:  luau --version && klur version"
+    echo "Toolchain installed and activated. In a new shell:  luau --version && klur version"
 else
     echo "Next step - install a toolchain:"
     echo "  jaciup toolchain install latest"

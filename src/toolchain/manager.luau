@@ -225,8 +225,10 @@ function Manager.install(channelOrVersion: string): boolean
 
     settings.installedToolchains = settings.installedToolchains or {}
     settings.installedToolchains[version] = true
-    if not settings.defaultToolchain or settings.defaultToolchain == "latest" then
+    -- Installing a toolchain activates it: it becomes the default.
+    if settings.defaultToolchain ~= version then
         settings.defaultToolchain = version
+        Term.log("info: activated toolchain '" .. version .. "' (now the default)")
     end
     Config.save(settings)
 

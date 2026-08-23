@@ -27,14 +27,10 @@ iwr -UseBasicParsing https://raw.githubusercontent.com/Jaci-Lang/jaciup/main/scr
 ./install.ps1
 ```
 
-The installer places `jaciup` in `~/.jaciup/bin`, adds it to your PATH, and
-configures your shell (bash, zsh, fish, PowerShell). Then install a toolchain:
-
-```bash
-jaciup toolchain install latest
-```
-
-`install.sh --with-toolchain` does both in one step.
+The installer places `jaciup` in `~/.jaciup/bin`, installs and activates
+the latest toolchain, adds the bin directory to your PATH, and configures
+your shell (bash, zsh, fish, PowerShell). Open a new shell and `luau` /
+`klur` are ready. Add `--no-toolchain` to install jaciup alone.
 
 ## Usage
 
